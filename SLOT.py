@@ -522,7 +522,7 @@ class MAINplot(param.Parameterized):
         im.write(dirname + models_dict[current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
                  delimiter='\t', overwrite=True)
 
-        bayesimage = Popen(['BayesImage ' + models_dict[current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
+        bayesimage = Popen(['bayesImage ' + models_dict[current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
                            shell=True, cwd=dirname)
         bayesimage.wait()
 
@@ -589,7 +589,7 @@ class MAINplot(param.Parameterized):
             im.write(dirname2 + models_dict[current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
                      delimiter='\t', overwrite=True)
 
-            bayesimage = Popen(['BayesImage ' + models_dict[current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
+            bayesimage = Popen(['bayesImage ' + models_dict[current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
                                shell=True, cwd=dirname2)
             bayesimage.wait()
 
