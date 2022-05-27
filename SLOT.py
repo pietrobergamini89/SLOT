@@ -111,7 +111,7 @@ class MAINplot(param.Parameterized):
     filter_selector = param.ObjectSelector(default=list(image_dict.keys())[0], objects=list(image_dict.keys()),
                                            label='Filter')
     scale_selector = param.Range(default=(0, 0.1), bounds=(0, 1), step=0.01, label='Scale')
-    references = param.ListSelector(objects=["References"])
+    references = param.ListSelector(objects=["Reference"])
 
     df = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X': [], 'Y': [], 'RA': [], 'DEC': []})
 
@@ -133,6 +133,8 @@ class MAINplot(param.Parameterized):
     dec_input = param.String(doc='Dec')
 
     insert = param.Action(lambda x: x.param.trigger('insert'))
+
+    update_ref = param.Action(lambda x: x.param.trigger('update_ref'))
 
     mcmc = param.Boolean(False, doc="MCMC")
 
@@ -294,8 +296,8 @@ class MAINplot(param.Parameterized):
         return hv.Points([(self.xc, self.yc)]).options({'Points': {'marker': '+', 'size': 10, 'color': 'red'}})
 
     # @param.depends('filter_selector', 'scale_selector', 'references', 'df', 'df_results', 'ra_map', 'dec_map')
-    @param.depends('filter_selector', 'scale_selector', 'references', 'gal', 'im', 'insert', 'compute_values',
-                   'input_table', 'clear_df')
+    @param.depends('filter_selector', 'scale_selector', 'references', 'update_ref', 'gal', 'im', 'insert',
+                   'compute_values', 'input_table', 'clear_df')
     def image_creator(self):
 
         if self.filter_selector != current_band[0]:
@@ -357,7 +359,7 @@ class MAINplot(param.Parameterized):
             output_gal = hv.Points([[0, 0]]).opts(color='white', marker='+', size=0)
 
         if self.references is not None:
-            if 'References' in self.references:
+            if 'Reference' in self.references:
                 if self.ra_map != '' and self.dec_map != '':
                     pixscale = WCS(image_dict[self.filter_selector][1]).pixel_scale_matrix[1, 1] * 3600
 
@@ -873,8 +875,12 @@ tab3 = pn.WidgetBox(
                    pn.layout.Divider(),
                    pn.Param(mainplot, parameters=["maps_selector"], show_name=False),
                    pn.Param(mainplot, widgets={"references": {'widget_type': pn.widgets.CheckButtonGroup,
-                                                              'width': 280, 'margin': (10, 0, 10, 9)}},
+                                                              'width': 280, 'margin': (10, 0, 1, 9)}},
                             parameters=["references"], show_name=False),
+                   pn.Param(mainplot, widgets={"update_ref": {'widget_type': pn.widgets.Button,
+                                                              "button_type": "success", 'name': 'Update reference',
+                                                              'margin': (0, 0, 10, 9), 'width': 280}},
+                            parameters=["update_ref"], show_name=False),
                    pn.Row(
                          pn.Param(mainplot, widgets={"z_map": {'widget_type': pn.widgets.TextInput,
                                                                'placeholder': 'z', 'name': ''}}, parameters=["z_map"],
