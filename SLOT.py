@@ -27,6 +27,8 @@ from astropy import units as u
 
 import zipfile
 
+import pickle
+
 pn.extension(loading_spinner='dots', loading_color='#00aa41')
 hv.extension('bokeh')
 pn.param.ParamMethod.loading_indicator = True
@@ -43,7 +45,7 @@ def image_preparator(dir_in='./images'):
         path = dir_in+'/'+image
         try:
             with fits.open(path) as hdu:
-                im_dict[image] = [np.asarray(hdu[0].data, dtype=float), WCS(hdu[0].header)]
+                im_dict[image] = [np.asarray(hdu[0].data, dtype=float), hdu[0].header]
         except:
             pass
     return im_dict
@@ -75,9 +77,21 @@ def lensing_preparator(dir_in='./lens_models'):
     return mod_dict
 
 
-models_dict = lensing_preparator()
+if os.path.isfile('bk_files.pkl'):
 
-image_dict = image_preparator()
+    files = pickle.load(open('bk_files.pkl', 'rb'))
+
+    image_dict = files[0]
+    models_dict = files[1]
+
+else:
+
+    image_dict = image_preparator()
+    models_dict = lensing_preparator()
+
+    with open('bk_files.pkl', 'wb') as f:
+        pickle.dump((image_dict, models_dict), f)
+
 
 current_band = ['']
 current_model = [list(models_dict.keys())[0]]
@@ -271,7 +285,7 @@ class MAINplot(param.Parameterized):
         if x is not None and y is not None:
             self.xc = x
             self.yc = y
-            radec = pixel_to_skycoord(x, y, image_dict[self.filter_selector][1])
+            radec = pixel_to_skycoord(x, y, WCS(image_dict[self.filter_selector][1]))
             self.ra_input = str(radec.ra.deg)
             self.dec_input = str(radec.dec.deg)
             self.ra_map = str(radec.ra.deg)
@@ -288,8 +302,8 @@ class MAINplot(param.Parameterized):
             self.data = image_dict[self.filter_selector][0]
             current_band[0] = self.filter_selector
 
-        x_ax = np.arange(image_dict[self.filter_selector][1].pixel_shape[0])
-        y_ax = np.arange(image_dict[self.filter_selector][1].pixel_shape[1])
+        x_ax = np.arange(WCS(image_dict[self.filter_selector][1]).pixel_shape[0])
+        y_ax = np.arange(WCS(image_dict[self.filter_selector][1]).pixel_shape[1])
 
         # MAIN IMAGE
         mimage = hv.Image((x_ax, y_ax, self.data))
@@ -331,7 +345,7 @@ class MAINplot(param.Parameterized):
                                     models_dict[current_model[0]]['CLUSTER_GALAXIES'],
                                     format='ascii', names=['ID', 'RA', 'DEC', 'a', 'b', 't', 'm_F160', 'l']).to_pandas()
                 coords_cg = SkyCoord(df_gal['RA'], df_gal['DEC'], unit='deg', frame='fk5')
-                xypix_cg = skycoord_to_pixel(coords_cg, image_dict[self.filter_selector][1])
+                xypix_cg = skycoord_to_pixel(coords_cg, WCS(image_dict[self.filter_selector][1]))
                 df_gal['X'] = xypix_cg[0]
                 df_gal['Y'] = xypix_cg[1]
                 hover_gal = HoverTool(tooltips=[('ID', '@ID'), ('Mag_F160W', '@m_F160')])
@@ -345,11 +359,11 @@ class MAINplot(param.Parameterized):
         if self.references is not None:
             if 'References' in self.references:
                 if self.ra_map != '' and self.dec_map != '':
-                    pixscale = image_dict[self.filter_selector][1].pixel_scale_matrix[1, 1] * 3600
+                    pixscale = WCS(image_dict[self.filter_selector][1]).pixel_scale_matrix[1, 1] * 3600
 
                     cref = skycoord_to_pixel(SkyCoord(models_dict[current_model[0]]['REF_COORDS'][0],
                                                       models_dict[current_model[0]]['REF_COORDS'][1], unit='deg',
-                                                      frame='fk5'), image_dict[self.filter_selector][1])
+                                                      frame='fk5'), WCS(image_dict[self.filter_selector][1]))
 
                     x_arcsec, y_arcsec = coord_diff(models_dict[current_model[0]]['REF_COORDS'][0],
                                                     models_dict[current_model[0]]['REF_COORDS'][1], float(self.ra_map),
@@ -390,7 +404,7 @@ class MAINplot(param.Parameterized):
         table_imlt = table_imlt_astropy.to_pandas()
 
         coords_imlt = SkyCoord(table_imlt['RA'], table_imlt['DEC'], unit='deg', frame='fk5')
-        xypix_imlt = skycoord_to_pixel(coords_imlt, image_dict[self.filter_selector][1])
+        xypix_imlt = skycoord_to_pixel(coords_imlt, WCS(image_dict[self.filter_selector][1]))
         table_imlt['X'] = xypix_imlt[0]
         table_imlt['Y'] = xypix_imlt[1]
         table_imlt = table_imlt[['ID', 'z', 'X', 'Y', 'RA', 'DEC']]
@@ -463,7 +477,7 @@ class MAINplot(param.Parameterized):
             table_im_astropy.keep_columns(['ID', 'RA', 'DEC', 'z'])
             table_im = table_im_astropy.to_pandas()
             coords_im = SkyCoord(table_im['RA'], table_im['DEC'], unit='deg', frame='fk5')
-            xypix_im = skycoord_to_pixel(coords_im, image_dict[self.filter_selector][1])
+            xypix_im = skycoord_to_pixel(coords_im, WCS(image_dict[self.filter_selector][1]))
             table_im['X'] = xypix_im[0]
             table_im['Y'] = xypix_im[1]
             table_im = table_im[['ID', 'z', 'X', 'Y', 'RA', 'DEC']]
@@ -552,10 +566,10 @@ class MAINplot(param.Parameterized):
         dist.replace_column('ID', names)
 
         coords = SkyCoord(dist['X'], dist['Y'], unit='deg', frame='fk5')
-        xypix = skycoord_to_pixel(coords, image_dict[self.filter_selector][1])
+        xypix = skycoord_to_pixel(coords, WCS(image_dict[self.filter_selector][1]))
 
         coordss = SkyCoord(ras, decs, unit='deg', frame='fk5')
-        xypixs = skycoord_to_pixel(coordss, image_dict[self.filter_selector][1])
+        xypixs = skycoord_to_pixel(coordss, WCS(image_dict[self.filter_selector][1]))
 
         if self.mcmc:
 
