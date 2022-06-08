@@ -29,26 +29,68 @@ import zipfile
 
 import pickle
 
+import time
+
 pn.extension(loading_spinner='dots', loading_color='#00aa41')
 hv.extension('bokeh')
 pn.param.ParamMethod.loading_indicator = True
+
+
+def clusters(dir_in='./CLUSTERS'):
+    cluster_dict = dict()
+    model_dict = dict()
+
+    for cl in os.listdir(dir_in):
+        if '.' not in cl:
+            cluster_dict[cl] = dict()
+            image_dict = dict()
+
+            for images_path in os.listdir(dir_in + '/' + cl + '/IMAGES'):
+                if '.fits' in images_path:
+                    image_dict[images_path] = str(dir_in + '/' + cl + '/IMAGES/'+images_path)
+
+            cluster_dict[cl]['IMAGES'] = image_dict
+
+            for models_path in os.listdir(dir_in + '/' + cl + '/LENS_MODELS'):
+
+                if '.' not in models_path:
+                    model_dict[models_path] = dict()
+                    with open(dir_in + '/' + cl + '/LENS_MODELS/' + models_path + '/SLOT.txt') as conf:
+                        lines = conf.readlines()
+                        for line in lines:
+                            if ':' in line:
+                                if 'REF_COORDS' in line:
+                                    model_dict[models_path][line.split(': ')[0]] = \
+                                        np.asarray([line.split(': ')[1].replace('\n', '').split(',')[0],
+                                                    line.split(': ')[1].replace('\n', '').split(',')[1]], dtype=float)
+                                else:
+                                    model_dict[models_path][line.split(': ')[0]] = line.split(': ')[1].replace('\n', '')
+            print(cl)
+            print(model_dict)
+            cluster_dict[cl]['LENS_MODELS'] = model_dict
+
+    print(cluster_dict)
+    quit()
+
+    return cluster_dict
 
 
 if not os.path.isdir('./computations'):
     os.mkdir('./computations')
 
 
-def image_preparator(dir_in='./images'):
-    im_dict = dict()
-    images = os.listdir(dir_in)
-    for i, image in enumerate(images):
-        path = dir_in+'/'+image
-        try:
-            with fits.open(path) as hdu:
-                im_dict[image] = [np.asarray(hdu[0].data, dtype=float), hdu[0].header]
-        except:
-            pass
-    return im_dict
+# def image_preparator(dir_in='./CLUSTERS/IMAGES'):
+#     im_dict = dict()
+#     images = os.listdir(dir_in)
+#     print(images)
+#     for i, image in enumerate(images):
+#         path = dir_in+'/'+image
+#         try:
+#             with fits.open(path) as hdu:
+#                 im_dict[image] = [np.asarray(hdu[0].data, dtype=float), hdu[0].header]
+#         except:
+#             pass
+#     return im_dict
 
 
 def coord_diff(ra_ref, dec_ref, ra, dec):
@@ -57,44 +99,59 @@ def coord_diff(ra_ref, dec_ref, ra, dec):
     return x, y
 
 
-def lensing_preparator(dir_in='./lens_models'):
-    mod_dict = dict()
+# def lensing_preparator(dir_in='./CLUSTERS/MACS0416/LENS_MODELS'):
+#     mod_dict = dict()
+#
+#     for models_path in os.listdir(dir_in):
+#         if '.' not in models_path:
+#             mod_dict[models_path] = dict()
+#             with open(dir_in + '/' + models_path + '/SLOT.txt') as conf:
+#                 lines = conf.readlines()
+#                 for line in lines:
+#                     if ':' in line:
+#                         if 'REF_COORDS' in line:
+#                             mod_dict[models_path][line.split(': ')[0]] = \
+#                                 np.asarray([line.split(': ')[1].replace('\n', '').split(',')[0],
+#                                             line.split(': ')[1].replace('\n', '').split(',')[1]], dtype=float)
+#                         else:
+#                             mod_dict[models_path][line.split(': ')[0]] = line.split(': ')[1].replace('\n', '')
+#
+#     return mod_dict
 
-    for models_path in os.listdir(dir_in):
-        if '.' not in models_path:
-            mod_dict[models_path] = dict()
-            with open('lens_models/' + models_path + '/SLOT.txt') as conf:
-                lines = conf.readlines()
-                for line in lines:
-                    if ':' in line:
-                        if 'REF_COORDS' in line:
-                            mod_dict[models_path][line.split(': ')[0]] = \
-                                np.asarray([line.split(': ')[1].replace('\n', '').split(',')[0],
-                                            line.split(': ')[1].replace('\n', '').split(',')[1]], dtype=float)
-                        else:
-                            mod_dict[models_path][line.split(': ')[0]] = line.split(': ')[1].replace('\n', '')
-
-    return mod_dict
-
-
+start_time = time.time()
 if os.path.isfile('bk_files.pkl'):
 
-    files = pickle.load(open('bk_files.pkl', 'rb'))
-
-    image_dict = files[0]
-    models_dict = files[1]
+    clusters_dic = pickle.load(open('bk_files.pkl', 'rb'))
 
 else:
 
-    image_dict = image_preparator()
-    models_dict = lensing_preparator()
+    clusters_dic = clusters(dir_in='./CLUSTERS')
 
     with open('bk_files.pkl', 'wb') as f:
-        pickle.dump((image_dict, models_dict), f)
+        pickle.dump(clusters_dic, f)
+    print("--- %s seconds ---" % (time.time() - start_time))
+quit()
 
-
+# current_cluster = ['']
+current_cluster = [list(clusters_dic.keys())[0]]
 current_band = ['']
-current_model = [list(models_dict.keys())[0]]
+# current_model = ['']
+current_model = [list(clusters_dic.keys())[0]]
+
+print(clusters_dic)
+print(current_cluster)
+print(clusters_dic[current_cluster[0]])
+# print(current_model[0])
+# print(clusters_dic[current_model[0]]['LENS_MODELS'].keys())
+quit()
+
+class CLUSTERselector(param.Parameterized):
+
+    cluster = param.ObjectSelector(default=list(clusters_dic.keys())[0], objects=list(clusters_dic.keys()), label='')
+
+    @param.depends('cluster')
+    def change_cluster(self):
+        current_cluster[0] = self.cluster
 
 
 class MODELselector(param.Parameterized):
@@ -794,6 +851,7 @@ class LensFiles(param.Parameterized):
 
 
 mainplot = MAINplot()
+cluster_selector = CLUSTERselector()
 lens_files = LensFiles()
 model_selector = MODELselector()
 
@@ -906,9 +964,14 @@ tab3 = pn.WidgetBox(
                    mainplot.map_generator
                    )
 
-widgets = pn.Column(title, subtitle, pn.Param(model_selector,
-                                              widgets={"model": {'widget_type': pn.widgets.Select}},
-                                              parameters=["model"], show_name=False),
+widgets = pn.Column(title,
+                    pn.Param(cluster_selector,
+                             widgets={"model": {'widget_type': pn.widgets.Select}},
+                             parameters=["model"], show_name=False),
+                    subtitle,
+                    pn.Param(model_selector,
+                             widgets={"model": {'widget_type': pn.widgets.Select}},
+                             parameters=["model"], show_name=False),
                     pn.layout.Divider(margin=(0, 30, 0, 5)),
                     fixed_widgets,
                     pn.Tabs(('Images', tab1), ('Model', tab2), ('Maps', tab3), width=350),
