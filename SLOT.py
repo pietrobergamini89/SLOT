@@ -38,9 +38,11 @@ pn.param.ParamMethod.loading_indicator = True
 
 def clusters(dir_in='./CLUSTERS'):
     cluster_dict = dict()
-    model_dict = dict()
 
     for cl in os.listdir(dir_in):
+
+        model_dict = dict()
+
         if '.' not in cl:
             cluster_dict[cl] = dict()
             image_dict = dict()
@@ -54,6 +56,7 @@ def clusters(dir_in='./CLUSTERS'):
             for models_path in os.listdir(dir_in + '/' + cl + '/LENS_MODELS'):
 
                 if '.' not in models_path:
+
                     model_dict[models_path] = dict()
                     with open(dir_in + '/' + cl + '/LENS_MODELS/' + models_path + '/SLOT.txt') as conf:
                         lines = conf.readlines()
@@ -65,12 +68,8 @@ def clusters(dir_in='./CLUSTERS'):
                                                     line.split(': ')[1].replace('\n', '').split(',')[1]], dtype=float)
                                 else:
                                     model_dict[models_path][line.split(': ')[0]] = line.split(': ')[1].replace('\n', '')
-            print(cl)
-            print(model_dict)
-            cluster_dict[cl]['LENS_MODELS'] = model_dict
 
-    print(cluster_dict)
-    quit()
+                cluster_dict[cl]['LENS_MODELS'] = model_dict
 
     return cluster_dict
 
@@ -118,56 +117,59 @@ def coord_diff(ra_ref, dec_ref, ra, dec):
 #
 #     return mod_dict
 
-start_time = time.time()
+# start_time = time.time()
+# print("--- %s seconds ---" % (time.time() - start_time))
+
 if os.path.isfile('bk_files.pkl'):
-
     clusters_dic = pickle.load(open('bk_files.pkl', 'rb'))
-
 else:
-
     clusters_dic = clusters(dir_in='./CLUSTERS')
 
     with open('bk_files.pkl', 'wb') as f:
         pickle.dump(clusters_dic, f)
-    print("--- %s seconds ---" % (time.time() - start_time))
-quit()
+
+
 
 # current_cluster = ['']
 current_cluster = [list(clusters_dic.keys())[0]]
-current_band = ['']
+wcs = ['']
+# current_band = ['']
+current_band = [list(clusters_dic[current_cluster[0]]['IMAGES'].keys())[0]]
 # current_model = ['']
-current_model = [list(clusters_dic.keys())[0]]
+current_model = [list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys())[0]]
 
-print(clusters_dic)
-print(current_cluster)
-print(clusters_dic[current_cluster[0]])
-# print(current_model[0])
-# print(clusters_dic[current_model[0]]['LENS_MODELS'].keys())
-quit()
-
-class CLUSTERselector(param.Parameterized):
-
-    cluster = param.ObjectSelector(default=list(clusters_dic.keys())[0], objects=list(clusters_dic.keys()), label='')
-
-    @param.depends('cluster')
-    def change_cluster(self):
-        current_cluster[0] = self.cluster
+# class CLUSTERselector(param.Parameterized):
+#
+#     cluster = param.ObjectSelector(default=list(clusters_dic.keys())[0], objects=list(clusters_dic.keys()), label='')
+#
+#     @param.depends('cluster')
+#     def change_cluster(self):
+#         current_cluster[0] = self.cluster
 
 
-class MODELselector(param.Parameterized):
-
-    model = param.ObjectSelector(default=list(models_dict.keys())[0], objects=list(models_dict.keys()), label='')
-
-    @param.depends('model')
-    def change_model(self):
-        current_model[0] = self.model
+# class MODELselector(param.Parameterized):
+#
+#     model = param.ObjectSelector(default=list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys())[0],
+#                                  objects=list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys()), label='')
+#
+#     @param.depends('model')
+#     def change_model(self):
+#         current_model[0] = self.model
 
 
 class MAINplot(param.Parameterized):
 
-    filter_selector = param.ObjectSelector(default=list(image_dict.keys())[0], objects=list(image_dict.keys()),
+    cluster = param.ObjectSelector(default=list(clusters_dic.keys())[0], objects=list(clusters_dic.keys()), label='')
+
+    model = param.ObjectSelector(default=list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys())[0],
+                                 objects=list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys()), label='')
+
+    filter_selector = param.ObjectSelector(default=list(clusters_dic[current_cluster[0]]['IMAGES'].keys())[0],
+                                           objects=list(clusters_dic[current_cluster[0]]['IMAGES'].keys()),
                                            label='Filter')
+
     scale_selector = param.Range(default=(0, 0.1), bounds=(0, 1), step=0.01, label='Scale')
+
     references = param.ListSelector(objects=["Reference"])
 
     df = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X': [], 'Y': [], 'RA': [], 'DEC': []})
@@ -229,6 +231,10 @@ class MAINplot(param.Parameterized):
         self.save_rtable = pn.widgets.FileDownload(name="", filename=self.table_results_file_name,
                                                    callback=self.save_rtable_file, margin=(0, 0, 15, 5),
                                                    button_type="primary")
+
+        with fits.open(clusters_dic[current_cluster[0]]['IMAGES'][current_band[0]]) as hdu:
+            self.data = np.asarray(hdu[0].data, dtype=float)
+            wcs[0] = WCS(hdu[0].header)
 
     def inizializer(self, len1, len2):
         a = np.empty((len1, len2))
@@ -344,7 +350,7 @@ class MAINplot(param.Parameterized):
         if x is not None and y is not None:
             self.xc = x
             self.yc = y
-            radec = pixel_to_skycoord(x, y, WCS(image_dict[self.filter_selector][1]))
+            radec = pixel_to_skycoord(x, y, wcs[0])
             self.ra_input = str(radec.ra.deg)
             self.dec_input = str(radec.dec.deg)
             self.ra_map = str(radec.ra.deg)
@@ -352,17 +358,31 @@ class MAINplot(param.Parameterized):
 
         return hv.Points([(self.xc, self.yc)]).options({'Points': {'marker': '+', 'size': 10, 'color': 'red'}})
 
+    @param.depends('cluster', watch=True)
+    def change_cluster(self):
+        current_cluster[0] = self.cluster
+        self.param.model.objects = list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys())
+        self.param.filter_selector.objects = list(clusters_dic[current_cluster[0]]['IMAGES'].keys())
+        current_band[0] = list(clusters_dic[current_cluster[0]]['IMAGES'].keys())[0]
+        current_model[0] = list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys())[0]
+
+    @param.depends('model')
+    def change_model(self):
+        current_model[0] = self.model
+
     # @param.depends('filter_selector', 'scale_selector', 'references', 'df', 'df_results', 'ra_map', 'dec_map')
     @param.depends('filter_selector', 'scale_selector', 'references', 'update_ref', 'gal', 'im', 'insert',
                    'compute_values', 'input_table', 'clear_df')
     def image_creator(self):
 
-        if self.filter_selector != current_band[0]:
-            self.data = image_dict[self.filter_selector][0]
+        # if self.filter_selector != current_band[0]:
+        with fits.open(clusters_dic[current_cluster[0]]['IMAGES'][current_band[0]]) as hdu:
+            self.data = np.asarray(hdu[0].data, dtype=float)
+            wcs[0] = WCS(hdu[0].header)
             current_band[0] = self.filter_selector
 
-        x_ax = np.arange(WCS(image_dict[self.filter_selector][1]).pixel_shape[0])
-        y_ax = np.arange(WCS(image_dict[self.filter_selector][1]).pixel_shape[1])
+        x_ax = np.arange(wcs[0].pixel_shape[0])
+        y_ax = np.arange(wcs[0].pixel_shape[1])
 
         # MAIN IMAGE
         mimage = hv.Image((x_ax, y_ax, self.data))
@@ -400,11 +420,11 @@ class MAINplot(param.Parameterized):
 
         if self.gal is not None:
             if 'Cluster galaxies' in self.gal:
-                df_gal = Table.read('lens_models/'+current_model[0]+'/' +
-                                    models_dict[current_model[0]]['CLUSTER_GALAXIES'],
+                df_gal = Table.read('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +
+                                    clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'],
                                     format='ascii', names=['ID', 'RA', 'DEC', 'a', 'b', 't', 'm_F160', 'l']).to_pandas()
                 coords_cg = SkyCoord(df_gal['RA'], df_gal['DEC'], unit='deg', frame='fk5')
-                xypix_cg = skycoord_to_pixel(coords_cg, WCS(image_dict[self.filter_selector][1]))
+                xypix_cg = skycoord_to_pixel(coords_cg, wcs[0])
                 df_gal['X'] = xypix_cg[0]
                 df_gal['Y'] = xypix_cg[1]
                 hover_gal = HoverTool(tooltips=[('ID', '@ID'), ('Mag_F160W', '@m_F160')])
@@ -418,14 +438,14 @@ class MAINplot(param.Parameterized):
         if self.references is not None:
             if 'Reference' in self.references:
                 if self.ra_map != '' and self.dec_map != '':
-                    pixscale = WCS(image_dict[self.filter_selector][1]).pixel_scale_matrix[1, 1] * 3600
+                    pixscale = wcs[0].pixel_scale_matrix[1, 1] * 3600
 
-                    cref = skycoord_to_pixel(SkyCoord(models_dict[current_model[0]]['REF_COORDS'][0],
-                                                      models_dict[current_model[0]]['REF_COORDS'][1], unit='deg',
-                                                      frame='fk5'), WCS(image_dict[self.filter_selector][1]))
+                    cref = skycoord_to_pixel(SkyCoord(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
+                                                      clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], unit='deg',
+                                                      frame='fk5'), wcs[0])
 
-                    x_arcsec, y_arcsec = coord_diff(models_dict[current_model[0]]['REF_COORDS'][0],
-                                                    models_dict[current_model[0]]['REF_COORDS'][1], float(self.ra_map),
+                    x_arcsec, y_arcsec = coord_diff(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
+                                                    clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], float(self.ra_map),
                                                     float(self.dec_map))
 
                     xmapmin = cref[0] + x_arcsec / pixscale - (self.size_map / 2) / pixscale
@@ -445,7 +465,10 @@ class MAINplot(param.Parameterized):
     @param.depends('filter_selector', 'scale_selector')
     def histo_scale(self):
         if self.filter_selector != current_band[0]:
-            self.data = image_dict[self.filter_selector][0]
+            with fits.open(clusters_dic[current_cluster[0]]['IMAGES'][current_band[0]]) as hdu:
+                self.data = hdu[0].data
+                wcs[0] = WCS(hdu[0].header)
+            # self.data = image_dict[self.filter_selector][0]
             current_band[0] = self.filter_selector
 
         histo, edges = np.histogram(self.data, range=[self.scale_selector[0], self.scale_selector[1]], density=False,
@@ -456,14 +479,14 @@ class MAINplot(param.Parameterized):
 
     @param.depends('im', watch=True)
     def images_model(self):
-        table_imlt_astropy = Table.read('lens_models/'+current_model[0]+'/' +
-                                models_dict[current_model[0]]['MULTIPLE_IMAGES'],
+        table_imlt_astropy = Table.read('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +
+                                clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'],
                                 format='ascii', names=['ID', 'RA', 'DEC', 'a', 'b', 't', 'z', 'l'])
         table_imlt_astropy.keep_columns(['ID', 'RA', 'DEC', 'z'])
         table_imlt = table_imlt_astropy.to_pandas()
 
         coords_imlt = SkyCoord(table_imlt['RA'], table_imlt['DEC'], unit='deg', frame='fk5')
-        xypix_imlt = skycoord_to_pixel(coords_imlt, WCS(image_dict[self.filter_selector][1]))
+        xypix_imlt = skycoord_to_pixel(coords_imlt, wcs[0])
         table_imlt['X'] = xypix_imlt[0]
         table_imlt['Y'] = xypix_imlt[1]
         table_imlt = table_imlt[['ID', 'z', 'X', 'Y', 'RA', 'DEC']]
@@ -536,7 +559,7 @@ class MAINplot(param.Parameterized):
             table_im_astropy.keep_columns(['ID', 'RA', 'DEC', 'z'])
             table_im = table_im_astropy.to_pandas()
             coords_im = SkyCoord(table_im['RA'], table_im['DEC'], unit='deg', frame='fk5')
-            xypix_im = skycoord_to_pixel(coords_im, WCS(image_dict[self.filter_selector][1]))
+            xypix_im = skycoord_to_pixel(coords_im, wcs[0])
             table_im['X'] = xypix_im[0]
             table_im['Y'] = xypix_im[1]
             table_im = table_im[['ID', 'z', 'X', 'Y', 'RA', 'DEC']]
@@ -568,20 +591,20 @@ class MAINplot(param.Parameterized):
         dirname = 'computations/' + str(np.random.randint(1, 1000000)) + '/'
         os.system('mkdir ' + dirname[:-1])
 
-        os.system('cp lens_models/'+current_model[0]+'/' + models_dict[current_model[0]]['BAYES_BEST']
+        os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_BEST']
                   + ' ' + dirname + 'bayes.dat')
 
-        os.system('cp lens_models/'+current_model[0]+'/'+models_dict[current_model[0]]['INPUT']
-                  + ' ' + dirname + models_dict[current_model[0]]['INPUT'])
+        os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
+                  + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
 
-        os.system('cp lens_models/'+current_model[0]+'/'+models_dict[current_model[0]]['CLUSTER_GALAXIES']
-                  + ' ' + dirname + models_dict[current_model[0]]['CLUSTER_GALAXIES'])
+        os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
+                  + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
 
         im.meta['comments'] = ['REFERENCE 0']
-        im.write(dirname + models_dict[current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
+        im.write(dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
                  delimiter='\t', overwrite=True)
 
-        bayesimage = Popen(['bayesImage ' + models_dict[current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
+        bayesimage = Popen(['bayesImage ' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
                            shell=True, cwd=dirname)
         bayesimage.wait()
 
@@ -625,10 +648,10 @@ class MAINplot(param.Parameterized):
         dist.replace_column('ID', names)
 
         coords = SkyCoord(dist['X'], dist['Y'], unit='deg', frame='fk5')
-        xypix = skycoord_to_pixel(coords, WCS(image_dict[self.filter_selector][1]))
+        xypix = skycoord_to_pixel(coords, wcs[0])
 
         coordss = SkyCoord(ras, decs, unit='deg', frame='fk5')
-        xypixs = skycoord_to_pixel(coordss, WCS(image_dict[self.filter_selector][1]))
+        xypixs = skycoord_to_pixel(coordss, wcs[0])
 
         if self.mcmc:
 
@@ -636,19 +659,19 @@ class MAINplot(param.Parameterized):
 
             os.system('mkdir ' + dirname2[:-1])
 
-            os.system('cp lens_models/' + current_model[0] + '/' + models_dict[current_model[0]]['BAYES_RANDOM']
+            os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_RANDOM']
                       + ' ' + dirname2 + 'bayes.dat')
 
-            os.system('cp lens_models/' + current_model[0] + '/' + models_dict[current_model[0]]['INPUT']
-                      + ' ' + dirname2 + models_dict[current_model[0]]['INPUT'])
+            os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
+                      + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
 
-            os.system('cp lens_models/' + current_model[0] + '/' + models_dict[current_model[0]]['CLUSTER_GALAXIES']
-                      + ' ' + dirname2 + models_dict[current_model[0]]['CLUSTER_GALAXIES'])
+            os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
+                      + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
 
-            im.write(dirname2 + models_dict[current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
+            im.write(dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
                      delimiter='\t', overwrite=True)
 
-            bayesimage = Popen(['bayesImage ' + models_dict[current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
+            bayesimage = Popen(['bayesImage ' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
                                shell=True, cwd=dirname2)
             bayesimage.wait()
 
@@ -753,12 +776,12 @@ class MAINplot(param.Parameterized):
 
             os.system('mkdir ' + dirname_maps[:-1])
 
-            with open('lens_models/' + current_model[0] + '/' + models_dict[current_model[0]]['BEST'], 'r') as f:
+            with open('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BEST'], 'r') as f:
                 lines = f.readlines()
             lines.insert(14, command)
 
-            x_arcsec, y_arcsec = coord_diff(models_dict[current_model[0]]['REF_COORDS'][0],
-                                            models_dict[current_model[0]]['REF_COORDS'][1], float(self.ra_map),
+            x_arcsec, y_arcsec = coord_diff(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
+                                            clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], float(self.ra_map),
                                             float(self.dec_map))
 
             xmapmin = np.round(x_arcsec - float(self.size_map) / 2, 1)
@@ -799,37 +822,32 @@ class LensFiles(param.Parameterized):
     def __init__(self, **params):
         super().__init__(**params)
 
-        self.file_download_par = pn.widgets.FileDownload('lens_models/' + current_model[0] +
-                                                         '/' + models_dict[current_model[0]]['INPUT'],
+        self.file_download_par = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'],
                                                          embed=True,
-                                                         filename=models_dict[current_model[0]]['INPUT'],
+                                                         filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'],
                                                          button_type="primary", width=285)
 
-        self.file_download_images = pn.widgets.FileDownload('lens_models/' + current_model[0] +
-                                                            '/' + models_dict[current_model[0]]['MULTIPLE_IMAGES'],
+        self.file_download_images = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'],
                                                             embed=True,
-                                                            filename=models_dict[current_model[0]]['MULTIPLE_IMAGES'],
+                                                            filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'],
                                                             button_type="primary",
                                                             width=285)
 
-        self.file_download_members = pn.widgets.FileDownload('lens_models/' + current_model[0] +
-                                                             '/' + models_dict[current_model[0]]['CLUSTER_GALAXIES'],
+        self.file_download_members = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'],
                                                              embed=True,
-                                                             filename=models_dict[current_model[0]]['CLUSTER_GALAXIES'],
+                                                             filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'],
                                                              button_type="primary",
                                                              width=285)
 
-        self.file_download_bayes = pn.widgets.FileDownload('lens_models/' + current_model[0] +
-                                                           '/' + models_dict[current_model[0]]['BAYES'],
+        self.file_download_bayes = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES'],
                                                            embed=True,
-                                                           filename=models_dict[current_model[0]]['BAYES'],
+                                                           filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES'],
                                                            button_type="primary",
                                                            width=285)
 
-        self.file_download_chires = pn.widgets.FileDownload('lens_models/' + current_model[0] +
-                                                            '/' + models_dict[current_model[0]]['CHIRES'],
+        self.file_download_chires = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CHIRES'],
                                                             embed=True,
-                                                            filename=models_dict[current_model[0]]['CHIRES'],
+                                                            filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CHIRES'],
                                                             button_type="primary",
                                                             width=285)
 
@@ -851,9 +869,8 @@ class LensFiles(param.Parameterized):
 
 
 mainplot = MAINplot()
-cluster_selector = CLUSTERselector()
 lens_files = LensFiles()
-model_selector = MODELselector()
+# model_selector = MODELselector()
 
 title = Div(text="<b>MACS J0416</b>",
                  style={'font-size': '16pt', 'color': 'black'}
@@ -965,11 +982,11 @@ tab3 = pn.WidgetBox(
                    )
 
 widgets = pn.Column(title,
-                    pn.Param(cluster_selector,
-                             widgets={"model": {'widget_type': pn.widgets.Select}},
-                             parameters=["model"], show_name=False),
+                    pn.Param(mainplot,
+                             widgets={"cluster": {'widget_type': pn.widgets.Select}},
+                             parameters=["cluster"], show_name=False),
                     subtitle,
-                    pn.Param(model_selector,
+                    pn.Param(mainplot,
                              widgets={"model": {'widget_type': pn.widgets.Select}},
                              parameters=["model"], show_name=False),
                     pn.layout.Divider(margin=(0, 30, 0, 5)),
