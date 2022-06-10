@@ -170,7 +170,7 @@ class MAINplot(param.Parameterized):
 
     scale_selector = param.Range(default=(0, 0.1), bounds=(0, 1), step=0.01, label='Scale')
 
-    references = param.ListSelector(objects=["Reference"])
+    references = param.ListSelector(objects=["Create region"])
 
     df = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X': [], 'Y': [], 'RA': [], 'DEC': []})
 
@@ -205,9 +205,9 @@ class MAINplot(param.Parameterized):
 
     table_results_file_name = param.String(default="Table_results.csv", doc='The filename to save to.')
 
-    maps_selector = param.ObjectSelector(default='Ampli', objects=['Ampli', 'AbsAmpli', 'Convergence', 'Shear',
-                                                                   'Mass_kpc2', 'Mass_pix2', 'Deflections'],
-                                         label='Map')
+    maps_selector = param.ObjectSelector(default='Magnification', objects=['Magnification', 'Convergence', 'Shear',
+                                                                   'Surface mass density', 'Deflection components'],
+                                         label='Map type:')
 
     z_map = param.String(doc='z')
     pix_map = param.String(doc='Pixels')
@@ -361,10 +361,24 @@ class MAINplot(param.Parameterized):
     @param.depends('cluster', watch=True)
     def change_cluster(self):
         current_cluster[0] = self.cluster
-        self.param.model.objects = list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys())
-        self.param.filter_selector.objects = list(clusters_dic[current_cluster[0]]['IMAGES'].keys())
-        current_band[0] = list(clusters_dic[current_cluster[0]]['IMAGES'].keys())[0]
-        current_model[0] = list(clusters_dic[current_cluster[0]]['LENS_MODELS'].keys())[0]
+        self.df = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X': [], 'Y': [], 'RA': [], 'DEC': []})
+
+        self.df_results = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X_best': [], 'Y_best': [],
+                                        'RA_best': [], 'dRA_16': [], 'dRA_50': [], 'dRA_84': [], 'DEC_best': [],
+                                        'dDEC_16': [], 'dDEC_50': [], 'dDEC_84': [], 'Xsource_best': [],
+                                        'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'AMP_best': [],
+                                        'AMP_16': [], 'AMP_50': [], 'AMP_84': [], 'DTIME_best': [], 'DTIME_16': [],
+                                        'DTIME_50': [], 'DTIME_84': [], 'PARITY': np.asarray([], dtype=str),
+                                        'SEP_16': [], 'SEP_50': [], 'SEP_84': []})
+        self.param.model.objects = list(clusters_dic[self.cluster]['LENS_MODELS'].keys())
+        self.model = list(clusters_dic[self.cluster]['LENS_MODELS'].keys())[0]
+        self.param.filter_selector.objects = list(clusters_dic[self.cluster]['IMAGES'].keys())
+        self.filter_selector = list(clusters_dic[self.cluster]['IMAGES'].keys())[0]
+
+        current_band[0] = list(clusters_dic[self.cluster]['IMAGES'].keys())[0]
+        current_model[0] = list(clusters_dic[self.cluster]['LENS_MODELS'].keys())[0]
+
+
 
     @param.depends('model')
     def change_model(self):
@@ -374,99 +388,104 @@ class MAINplot(param.Parameterized):
     @param.depends('filter_selector', 'scale_selector', 'references', 'update_ref', 'gal', 'im', 'insert',
                    'compute_values', 'input_table', 'clear_df')
     def image_creator(self):
+        try:
+            if self.filter_selector != current_band[0]:
+                with fits.open(clusters_dic[self.cluster]['IMAGES'][self.filter_selector]) as hdu:
+                    self.data = np.asarray(hdu[0].data, dtype=float)
+                    wcs[0] = WCS(hdu[0].header)
+                    current_band[0] = self.filter_selector
 
-        # if self.filter_selector != current_band[0]:
-        with fits.open(clusters_dic[current_cluster[0]]['IMAGES'][current_band[0]]) as hdu:
-            self.data = np.asarray(hdu[0].data, dtype=float)
-            wcs[0] = WCS(hdu[0].header)
-            current_band[0] = self.filter_selector
+            x_ax = np.arange(wcs[0].pixel_shape[0])
+            y_ax = np.arange(wcs[0].pixel_shape[1])
 
-        x_ax = np.arange(wcs[0].pixel_shape[0])
-        y_ax = np.arange(wcs[0].pixel_shape[1])
+            # MAIN IMAGE
 
-        # MAIN IMAGE
-        mimage = hv.Image((x_ax, y_ax, self.data))
-        image = rasterize(mimage.opts(aspect='equal', responsive=True, cmap='Greys', clim=(self.scale_selector[0],
-                                                                                           self.scale_selector[1]),
-                                      colorbar=True, tools=['zoom_in', 'zoom_out', 'undo', 'redo', 'reset']),
-                          precompute=True)
+            mimage = hv.Image((x_ax, y_ax, self.data))
+            image = rasterize(mimage.opts(aspect='equal', responsive=True, cmap='Greys', clim=(self.scale_selector[0],
+                                                                                               self.scale_selector[1]),
+                                          colorbar=True, tools=['zoom_in', 'zoom_out', 'undo', 'redo', 'reset']),
+                              precompute=True)
 
-        double_tap = hv.streams.DoubleTap(source=mimage)
-        dtap = hv.DynamicMap(self.doubletap, streams=[double_tap])
+            double_tap = hv.streams.DoubleTap(source=mimage)
+            dtap = hv.DynamicMap(self.doubletap, streams=[double_tap])
 
-        # INPUT MULTIPLE IMAGES
+            # INPUT MULTIPLE IMAGES
 
-        hover_im = HoverTool(tooltips=[('z', '@z')])
-        input_images = hv.Points(self.df, kdims=['X', 'Y']).opts(color='limegreen', marker='+', size=10, tools=[hover_im])
-        input_images_labels = hv.Labels((self.df['X'], self.df['Y'], self.df['ID'])).opts(opts.Labels(
-            text_color='limegreen', text_font_size='12pt'))
+            hover_im = HoverTool(tooltips=[('z', '@z')])
+            input_images = hv.Points(self.df, kdims=['X', 'Y']).opts(color='limegreen', marker='+', size=10, tools=[hover_im])
+            input_images_labels = hv.Labels((self.df['X'], self.df['Y'], self.df['ID'])).opts(opts.Labels(
+                text_color='limegreen', text_font_size='12pt'))
 
-        # OUTPUT MULTIPLE IMAGES
+            # OUTPUT MULTIPLE IMAGES
 
-        hover_res = HoverTool(tooltips=[('AMP', '@AMP_best'), ('DTIME', '@DTIME_best'), ('PARITY', '@PARITY')])
+            hover_res = HoverTool(tooltips=[('AMP', '@AMP_best'), ('DTIME', '@DTIME_best'), ('PARITY', '@PARITY')])
 
-        output_images = hv.Points(self.df_results, kdims=['X_best', 'Y_best']).opts(color='orange', marker='+', size=10,
-                                                                                    tools=[hover_res])
-        output_images_labels = hv.Labels((self.df_results['X_best'], self.df_results['Y_best'],
-                                          self.df_results['ID'])).opts(opts.Labels(text_color='orange',
-                                                                                   text_font_size='12pt'))
+            output_images = hv.Points(self.df_results, kdims=['X_best', 'Y_best']).opts(color='orange', marker='+', size=10,
+                                                                                        tools=[hover_res])
+            output_images_labels = hv.Labels((self.df_results['X_best'], self.df_results['Y_best'],
+                                              self.df_results['ID'])).opts(opts.Labels(text_color='orange',
+                                                                                       text_font_size='12pt'))
 
-        sources = hv.Points(self.df_results, kdims=['Xsource_best', 'Ysource_best']).opts(color='blue', marker='+',
-                                                                                          size=10)
-        sources_labels = hv.Labels((self.df_results['Xsource_best'], self.df_results['Ysource_best'],
-                                    self.df_results['ID'])).opts(opts.Labels(text_color='blue', text_font_size='12pt'))
+            sources = hv.Points(self.df_results, kdims=['Xsource_best', 'Ysource_best']).opts(color='blue', marker='+',
+                                                                                              size=10)
+            sources_labels = hv.Labels((self.df_results['Xsource_best'], self.df_results['Ysource_best'],
+                                        self.df_results['ID'])).opts(opts.Labels(text_color='blue', text_font_size='12pt'))
 
-        # INPUT CLUSTER GALAXIES
+            # INPUT CLUSTER GALAXIES
 
-        if self.gal is not None:
-            if 'Cluster galaxies' in self.gal:
-                df_gal = Table.read('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +
-                                    clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'],
-                                    format='ascii', names=['ID', 'RA', 'DEC', 'a', 'b', 't', 'm_F160', 'l']).to_pandas()
-                coords_cg = SkyCoord(df_gal['RA'], df_gal['DEC'], unit='deg', frame='fk5')
-                xypix_cg = skycoord_to_pixel(coords_cg, wcs[0])
-                df_gal['X'] = xypix_cg[0]
-                df_gal['Y'] = xypix_cg[1]
-                hover_gal = HoverTool(tooltips=[('ID', '@ID'), ('Mag_F160W', '@m_F160')])
-                output_gal = hv.Scatter(df_gal, kdims=['X', 'Y']).opts(line_color='magenta', color='none', marker='o',
-                                                                       size=20, tools=[hover_gal])
+            if self.gal is not None:
+                if 'Cluster galaxies' in self.gal:
+                    df_gal = Table.read('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +
+                                        clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'],
+                                        format='ascii', names=['ID', 'RA', 'DEC', 'a', 'b', 't', 'm_F160', 'l']).to_pandas()
+
+                    coords_cg = SkyCoord(df_gal['RA'], df_gal['DEC'], unit='deg', frame='fk5')
+                    xypix_cg = skycoord_to_pixel(coords_cg, wcs[0])
+
+                    df_gal['X'] = xypix_cg[0]
+                    df_gal['Y'] = xypix_cg[1]
+                    hover_gal = HoverTool(tooltips=[('ID', '@ID'), ('Mag_F160W', '@m_F160')])
+                    output_gal = hv.Scatter(df_gal, kdims=['X', 'Y']).opts(line_color='magenta', color='none', marker='o',
+                                                                           size=20, tools=[hover_gal])
+                else:
+                    output_gal = hv.Points([[0, 0]]).opts(color='white', marker='+', size=0)
             else:
                 output_gal = hv.Points([[0, 0]]).opts(color='white', marker='+', size=0)
-        else:
-            output_gal = hv.Points([[0, 0]]).opts(color='white', marker='+', size=0)
 
-        if self.references is not None:
-            if 'Reference' in self.references:
-                if self.ra_map != '' and self.dec_map != '':
-                    pixscale = wcs[0].pixel_scale_matrix[1, 1] * 3600
+            if self.references is not None:
+                if 'Create region' in self.references:
+                    if self.ra_map != '' and self.dec_map != '':
+                        pixscale = wcs[0].pixel_scale_matrix[1, 1] * 3600
 
-                    cref = skycoord_to_pixel(SkyCoord(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
-                                                      clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], unit='deg',
-                                                      frame='fk5'), wcs[0])
+                        cref = skycoord_to_pixel(SkyCoord(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
+                                                          clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], unit='deg',
+                                                          frame='fk5'), wcs[0])
 
-                    x_arcsec, y_arcsec = coord_diff(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
-                                                    clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], float(self.ra_map),
-                                                    float(self.dec_map))
+                        x_arcsec, y_arcsec = coord_diff(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
+                                                        clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], float(self.ra_map),
+                                                        float(self.dec_map))
 
-                    xmapmin = cref[0] + x_arcsec / pixscale - (self.size_map / 2) / pixscale
-                    xmapmax = cref[0] + x_arcsec / pixscale + (self.size_map / 2) / pixscale
-                    ymapmin = cref[1] + y_arcsec / pixscale - (self.size_map / 2) / pixscale
-                    ymapmax = cref[1] + y_arcsec / pixscale + (self.size_map / 2) / pixscale
+                        xmapmin = cref[0] + x_arcsec / pixscale - (self.size_map / 2) / pixscale
+                        xmapmax = cref[0] + x_arcsec / pixscale + (self.size_map / 2) / pixscale
+                        ymapmin = cref[1] + y_arcsec / pixscale - (self.size_map / 2) / pixscale
+                        ymapmax = cref[1] + y_arcsec / pixscale + (self.size_map / 2) / pixscale
 
-                    map = hv.Curve([(xmapmin, ymapmin), (xmapmin, ymapmax), (xmapmax, ymapmax), (xmapmax, ymapmin),
-                                    (xmapmin, ymapmin)]).opts(color='lightblue')
+                        map = hv.Curve([(xmapmin, ymapmin), (xmapmin, ymapmax), (xmapmax, ymapmax), (xmapmax, ymapmin),
+                                        (xmapmin, ymapmin)]).opts(color='lightblue')
 
-                    return image * map * input_images * input_images_labels * dtap * output_gal * output_images * \
-                        output_images_labels * sources * sources_labels
+                        return image * map * input_images * input_images_labels * dtap * output_gal * output_images * \
+                            output_images_labels * sources * sources_labels
 
-        return image * input_images * input_images_labels * dtap * output_gal * output_images * output_images_labels * \
-            sources * sources_labels
+            return image * input_images * input_images_labels * dtap * output_gal * output_images * output_images_labels * \
+                sources * sources_labels
+        except:
+            return image
 
     @param.depends('filter_selector', 'scale_selector')
     def histo_scale(self):
         if self.filter_selector != current_band[0]:
-            with fits.open(clusters_dic[current_cluster[0]]['IMAGES'][current_band[0]]) as hdu:
-                self.data = hdu[0].data
+            with fits.open(clusters_dic[self.cluster]['IMAGES'][self.filter_selector]) as hdu:
+                self.data = np.asarray(hdu[0].data, dtype=float)
                 wcs[0] = WCS(hdu[0].header)
             # self.data = image_dict[self.filter_selector][0]
             current_band[0] = self.filter_selector
@@ -526,31 +545,34 @@ class MAINplot(param.Parameterized):
 
     @param.depends('insert', watch=True)
     def add_value(self):
-        if self.xc != 0 or self.yc != 0:
-            if ',' in self.z_input:
-                val = self.z_input.split(',')
-                z_multiple = np.arange(float(val[0]), float(val[1]), float(val[2]))
-                id_multiple_list = []
+        try:
+            if self.xc != 0 or self.yc != 0:
+                if ',' in self.z_input:
+                    val = self.z_input.split(',')
+                    z_multiple = np.arange(float(val[0]), float(val[1]), float(val[2]))
+                    id_multiple_list = []
 
-                for i in np.arange(len(z_multiple)):
-                    id_multiple_list.append(self.id_input[:-1] + str(i+1) + self.id_input[-1])
+                    for i in np.arange(len(z_multiple)):
+                        id_multiple_list.append(self.id_input[:-1] + str(i+1) + self.id_input[-1])
 
-                add_df = pd.DataFrame({'ID': np.asarray(id_multiple_list, dtype=str),
-                                       'z': z_multiple,
-                                       'X': np.full(len(z_multiple), float(self.xc)),
-                                       'Y': np.full(len(z_multiple), float(self.yc)),
-                                       'RA': np.full(len(z_multiple), float(self.ra_input)),
-                                       'DEC': np.full(len(z_multiple), float(self.dec_input))})
+                    add_df = pd.DataFrame({'ID': np.asarray(id_multiple_list, dtype=str),
+                                           'z': z_multiple,
+                                           'X': np.full(len(z_multiple), float(self.xc)),
+                                           'Y': np.full(len(z_multiple), float(self.yc)),
+                                           'RA': np.full(len(z_multiple), float(self.ra_input)),
+                                           'DEC': np.full(len(z_multiple), float(self.dec_input))})
 
-                self.df = pd.concat([self.df, add_df], ignore_index=True)
+                    self.df = pd.concat([self.df, add_df], ignore_index=True)
 
-            else:
-                self.df = self.df.append({'ID': self.id_input,
-                                          'z': float(self.z_input),
-                                          'X': float(self.xc),
-                                          'Y': float(self.yc),
-                                          'RA': float(self.ra_input),
-                                          'DEC': float(self.dec_input)}, ignore_index=True)
+                else:
+                    self.df = self.df.append({'ID': self.id_input,
+                                              'z': float(self.z_input),
+                                              'X': float(self.xc),
+                                              'Y': float(self.yc),
+                                              'RA': float(self.ra_input),
+                                              'DEC': float(self.dec_input)}, ignore_index=True)
+        except:
+            pass
 
     @param.depends('input_table', watch=True)
     def read_file(self):
@@ -569,140 +591,142 @@ class MAINplot(param.Parameterized):
 
     @param.depends('compute_values', watch=True)
     def compute(self):
+        try:
+            self.df_results = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X_best': [], 'Y_best': [],
+                                            'RA_best': [], 'dRA_16': [], 'dRA_50': [], 'dRA_84': [], 'DEC_best': [],
+                                            'dDEC_16': [], 'dDEC_50': [], 'dDEC_84': [], 'Xsource_best': [],
+                                            'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'AMP_best': [],
+                                            'AMP_16': [], 'AMP_50': [], 'AMP_84': [], 'DTIME_best': [], 'DTIME_16': [],
+                                            'DTIME_50': [], 'DTIME_84': [], 'PARITY': np.asarray([], dtype=str),
+                                            'SEP_16': [], 'SEP_50': [], 'SEP_84': []})
 
-        self.df_results = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X_best': [], 'Y_best': [],
-                                        'RA_best': [], 'dRA_16': [], 'dRA_50': [], 'dRA_84': [], 'DEC_best': [],
-                                        'dDEC_16': [], 'dDEC_50': [], 'dDEC_84': [], 'Xsource_best': [],
-                                        'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'AMP_best': [],
-                                        'AMP_16': [], 'AMP_50': [], 'AMP_84': [], 'DTIME_best': [], 'DTIME_16': [],
-                                        'DTIME_50': [], 'DTIME_84': [], 'PARITY': np.asarray([], dtype=str),
-                                        'SEP_16': [], 'SEP_50': [], 'SEP_84': []})
+            im = Table()
+            im['col1'] = np.array(self.df['ID'], dtype=str)
+            im['col2'] = np.array(self.df['RA'], dtype=float)
+            im['col3'] = np.array(self.df['DEC'], dtype=float)
+            im['col4'] = np.full(len(self.df['RA']), 0.1, dtype=float)
+            im['col5'] = np.full(len(self.df['RA']), 0.1, dtype=float)
+            im['col6'] = np.full(len(self.df['RA']), 0, dtype=float)
+            im['col7'] = np.array(self.df['z'], dtype=float)
+            im['col8'] = np.full(len(self.df['RA']), 25, dtype=float)
 
-        im = Table()
-        im['col1'] = np.array(self.df['ID'], dtype=str)
-        im['col2'] = np.array(self.df['RA'], dtype=float)
-        im['col3'] = np.array(self.df['DEC'], dtype=float)
-        im['col4'] = np.full(len(self.df['RA']), 0.1, dtype=float)
-        im['col5'] = np.full(len(self.df['RA']), 0.1, dtype=float)
-        im['col6'] = np.full(len(self.df['RA']), 0, dtype=float)
-        im['col7'] = np.array(self.df['z'], dtype=float)
-        im['col8'] = np.full(len(self.df['RA']), 25, dtype=float)
+            dirname = 'computations/' + str(np.random.randint(1, 1000000)) + '/'
+            os.system('mkdir ' + dirname[:-1])
 
-        dirname = 'computations/' + str(np.random.randint(1, 1000000)) + '/'
-        os.system('mkdir ' + dirname[:-1])
+            os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_BEST']
+                      + ' ' + dirname + 'bayes.dat')
 
-        os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_BEST']
-                  + ' ' + dirname + 'bayes.dat')
+            os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
+                      + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
 
-        os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
-                  + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
+            os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
+                      + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
 
-        os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
-                  + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
-
-        im.meta['comments'] = ['REFERENCE 0']
-        im.write(dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
-                 delimiter='\t', overwrite=True)
-
-        bayesimage = Popen(['bayesImage ' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
-                           shell=True, cwd=dirname)
-        bayesimage.wait()
-
-        sources = Table.read(dirname + 'images/source0.dat', format='ascii')
-        dist = Table.read(dirname + 'images/dist0.dat', format='ascii', header_start=1)
-        ra_ref = float(dist.meta['comments'][0].split(' ')[2])
-        dec_ref = float(dist.meta['comments'][0].split(' ')[3])
-
-        x_b = np.asarray(dist['X'])
-        y_b = np.asarray(dist['Y'])
-
-        dist['X'] = ra_ref - dist['X'] / (np.cos(dec_ref / 180.0 * np.pi) * 3600.0)
-        dist['Y'] = dist['Y'] / 3600.0 + dec_ref
-
-        sources['col2'] = ra_ref - sources['col2'] / (np.cos(dec_ref / 180.0 * np.pi) * 3600.0)
-        sources['col3'] = sources['col3'] / 3600.0 + dec_ref
-
-        names = dist['ID'].astype(str)
-        redshift = np.zeros(len(names))
-        ras = np.zeros(len(names))
-        decs = np.zeros(len(names))
-
-        l = list(string.ascii_lowercase)
-        idp = -1
-        il = 0
-
-        for i, ids in enumerate(dist['ID']):
-            mask_sources = (sources['col1'] == ids)
-            redshift[i] = float(sources['col7'][mask_sources])
-            ras[i] = float(sources['col2'][mask_sources])
-            decs[i] = float(sources['col3'][mask_sources])
-
-            if ids != idp:
-                idp = ids
-                il = 0
-
-            names[i] = str(ids) + l[il]
-
-            il += 1
-
-        dist.replace_column('ID', names)
-
-        coords = SkyCoord(dist['X'], dist['Y'], unit='deg', frame='fk5')
-        xypix = skycoord_to_pixel(coords, wcs[0])
-
-        coordss = SkyCoord(ras, decs, unit='deg', frame='fk5')
-        xypixs = skycoord_to_pixel(coordss, wcs[0])
-
-        if self.mcmc:
-
-            dirname2 = 'computations/' + str(np.random.randint(1, 1000000)) + '/'
-
-            os.system('mkdir ' + dirname2[:-1])
-
-            os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_RANDOM']
-                      + ' ' + dirname2 + 'bayes.dat')
-
-            os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
-                      + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
-
-            os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
-                      + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
-
-            im.write(dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
+            im.meta['comments'] = ['REFERENCE 0']
+            im.write(dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
                      delimiter='\t', overwrite=True)
 
             bayesimage = Popen(['bayesImage ' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
-                               shell=True, cwd=dirname2)
+                               shell=True, cwd=dirname)
             bayesimage.wait()
 
-            percentiles_AMP, percentiles_DTIME, percentiles_sep, x, y = self.bayesImageResults(dirname2 + '/images',
-                                                                                          dirname + '/images/dist0.dat')
+            sources = Table.read(dirname + 'images/source0.dat', format='ascii')
+            dist = Table.read(dirname + 'images/dist0.dat', format='ascii', header_start=1)
+            ra_ref = float(dist.meta['comments'][0].split(' ')[2])
+            dec_ref = float(dist.meta['comments'][0].split(' ')[3])
 
-            df3 = pd.DataFrame(
-                {'ID': dist['ID'], 'z': redshift, 'X_best': xypix[0], 'Y_best': xypix[1], 'RA_best': dist['X'],
-                 'dRA_16': np.round(x[:, 0], 4) - x_b, 'dRA_50': np.round(x[:, 1], 4) - x_b,
-                 'dRA_84': np.round(x[:, 2], 4) - x_b, 'DEC_best': dist['Y'], 'dDEC_16': np.round(y[:, 0], 4) - y_b,
-                 'dDEC_50': np.round(y[:, 1], 4) - y_b, 'dDEC_84': np.round(y[:, 2], 4) - y_b,
-                 'Xsource_best': xypixs[0], 'Ysource_best': xypixs[1], 'RAsource_best': ras, 'DECsource_best': decs,
-                 'AMP_best': dist['AMP'], 'AMP_16': np.round(percentiles_AMP[:, 0], 3),
-                 'AMP_50': np.round(percentiles_AMP[:, 1], 3), 'AMP_84': np.round(percentiles_AMP[:, 2], 3),
-                 'DTIME_best': dist['DTIME'], 'DTIME_16': np.round(percentiles_DTIME[:, 0], 3),
-                 'DTIME_50': np.round(percentiles_DTIME[:, 1], 3), 'DTIME_84': np.round(percentiles_DTIME[:, 2], 3),
-                 'PARITY': dist['PARITY'], 'SEP_16': np.round(percentiles_sep[:, 0], 3),
-                 'SEP_50': np.round(percentiles_sep[:, 1], 3), 'SEP_84': np.round(percentiles_sep[:, 2], 3)})
+            x_b = np.asarray(dist['X'])
+            y_b = np.asarray(dist['Y'])
 
-            os.system('rm -r ' + dirname2[:-1])
+            dist['X'] = ra_ref - dist['X'] / (np.cos(dec_ref / 180.0 * np.pi) * 3600.0)
+            dist['Y'] = dist['Y'] / 3600.0 + dec_ref
 
-        else:
-            df3 = pd.DataFrame(
-                {'ID': dist['ID'], 'z': redshift, 'X_best': xypix[0], 'Y_best': xypix[1], 'RA_best': dist['X'],
-                 'DEC_best': dist['Y'], 'Xsource_best': xypixs[0], 'Ysource_best': xypixs[1], 'RAsource_best': ras,
-                 'DECsource_best': decs, 'AMP_best': dist['AMP'], 'DTIME_best': dist['DTIME'],
-                 'PARITY': dist['PARITY']})
+            sources['col2'] = ra_ref - sources['col2'] / (np.cos(dec_ref / 180.0 * np.pi) * 3600.0)
+            sources['col3'] = sources['col3'] / 3600.0 + dec_ref
 
-        os.system('rm -r ' + dirname[:-1])
+            names = dist['ID'].astype(str)
+            redshift = np.zeros(len(names))
+            ras = np.zeros(len(names))
+            decs = np.zeros(len(names))
 
-        self.df_results = df3
+            l = list(string.ascii_lowercase)
+            idp = -1
+            il = 0
+
+            for i, ids in enumerate(dist['ID']):
+                mask_sources = (sources['col1'] == ids)
+                redshift[i] = float(sources['col7'][mask_sources])
+                ras[i] = float(sources['col2'][mask_sources])
+                decs[i] = float(sources['col3'][mask_sources])
+
+                if ids != idp:
+                    idp = ids
+                    il = 0
+
+                names[i] = str(ids) + l[il]
+
+                il += 1
+
+            dist.replace_column('ID', names)
+
+            coords = SkyCoord(dist['X'], dist['Y'], unit='deg', frame='fk5')
+            xypix = skycoord_to_pixel(coords, wcs[0])
+
+            coordss = SkyCoord(ras, decs, unit='deg', frame='fk5')
+            xypixs = skycoord_to_pixel(coordss, wcs[0])
+
+            if self.mcmc:
+
+                dirname2 = 'computations/' + str(np.random.randint(1, 1000000)) + '/'
+
+                os.system('mkdir ' + dirname2[:-1])
+
+                os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_RANDOM']
+                          + ' ' + dirname2 + 'bayes.dat')
+
+                os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
+                          + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
+
+                os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
+                          + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
+
+                im.write(dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['MULTIPLE_IMAGES'], format='ascii.fixed_width_no_header',
+                         delimiter='\t', overwrite=True)
+
+                bayesimage = Popen(['bayesImage ' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']], stdout=PIPE, stderr=PIPE,
+                                   shell=True, cwd=dirname2)
+                bayesimage.wait()
+
+                percentiles_AMP, percentiles_DTIME, percentiles_sep, x, y = self.bayesImageResults(dirname2 + '/images',
+                                                                                              dirname + '/images/dist0.dat')
+
+                df3 = pd.DataFrame(
+                    {'ID': dist['ID'], 'z': redshift, 'X_best': xypix[0], 'Y_best': xypix[1], 'RA_best': dist['X'],
+                     'dRA_16': np.round(x[:, 0], 4) - x_b, 'dRA_50': np.round(x[:, 1], 4) - x_b,
+                     'dRA_84': np.round(x[:, 2], 4) - x_b, 'DEC_best': dist['Y'], 'dDEC_16': np.round(y[:, 0], 4) - y_b,
+                     'dDEC_50': np.round(y[:, 1], 4) - y_b, 'dDEC_84': np.round(y[:, 2], 4) - y_b,
+                     'Xsource_best': xypixs[0], 'Ysource_best': xypixs[1], 'RAsource_best': ras, 'DECsource_best': decs,
+                     'AMP_best': dist['AMP'], 'AMP_16': np.round(percentiles_AMP[:, 0], 3),
+                     'AMP_50': np.round(percentiles_AMP[:, 1], 3), 'AMP_84': np.round(percentiles_AMP[:, 2], 3),
+                     'DTIME_best': dist['DTIME'], 'DTIME_16': np.round(percentiles_DTIME[:, 0], 3),
+                     'DTIME_50': np.round(percentiles_DTIME[:, 1], 3), 'DTIME_84': np.round(percentiles_DTIME[:, 2], 3),
+                     'PARITY': dist['PARITY'], 'SEP_16': np.round(percentiles_sep[:, 0], 3),
+                     'SEP_50': np.round(percentiles_sep[:, 1], 3), 'SEP_84': np.round(percentiles_sep[:, 2], 3)})
+
+                os.system('rm -r ' + dirname2[:-1])
+
+            else:
+                df3 = pd.DataFrame(
+                    {'ID': dist['ID'], 'z': redshift, 'X_best': xypix[0], 'Y_best': xypix[1], 'RA_best': dist['X'],
+                     'DEC_best': dist['Y'], 'Xsource_best': xypixs[0], 'Ysource_best': xypixs[1], 'RAsource_best': ras,
+                     'DECsource_best': decs, 'AMP_best': dist['AMP'], 'DTIME_best': dist['DTIME'],
+                     'PARITY': dist['PARITY']})
+
+            os.system('rm -r ' + dirname[:-1])
+
+            self.df_results = df3
+        except:
+            pass
 
     @param.depends('table_file_name', watch=True)
     def update_filename_table(self):
@@ -737,84 +761,98 @@ class MAINplot(param.Parameterized):
     def map_widget(self):
         return self.mapd
 
+    @param.depends('maps_selector', watch=True)
+    def map_sel(self):
+        if self.maps_selector == 'Surface mass density':
+            self.z_map = clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['Z']
+
     @param.depends('generate_map')
     def map_generator(self):
+        try:
+            if self.z_map != '' and self.pix_map != '' and self.ra_map != '' and self.dec_map != '':
 
-        if self.z_map != '' and self.pix_map != '' and self.ra_map != '' and self.dec_map != '':
+                command = ''
+                if self.maps_selector == 'Magnification':
+                    command += '    ampli 1 ' + self.pix_map + ' ' + self.z_map + ' Magnification_z' + self.z_map + '_Npix' + \
+                               self.pix_map + '.fits \n'
+                    name = 'Magnification_z' + self.z_map + '_Npix' + self.pix_map + '.fits'
+                # if self.maps_selector == 'Magnification modulus':
+                #     command += '    ampli 2 ' + self.pix_map + ' ' + self.z_map + ' AbsAmpli_z' + self.z_map + '_Npix' + \
+                #                self.pix_map + '.fits \n'
+                #     name = 'AbsAmpli_z' + self.z_map + '_Npix' + self.pix_map + '.fits'
+                if self.maps_selector == 'Convergence':
+                    command += '    ampli 5 ' + self.pix_map + ' ' + self.z_map + ' Convergence_Npix' + self.pix_map + \
+                               '.fits \n'
+                    name = 'Convergence_Npix' + self.pix_map + '.fits'
+                if self.maps_selector == 'Shear':
+                    command += '    ampli 6 ' + self.pix_map + ' ' + self.z_map + ' Shear_Npix' + self.pix_map + '.fits \n'
+                    name = 'Shear_Npix' + self.pix_map + '.fits'
+                if self.maps_selector == 'Surface mass density':
+                    self.z_map = clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['Z']
+                    command += '    mass 4 ' + self.pix_map + ' ' + str(float(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['Z'])) + ' Mass_z' + str(float(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['Z'])) + '_Npix' + \
+                               self.pix_map + '.fits \n'
+                    name = 'Mass_z' + str(float(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['Z'])) + '_Npix' + self.pix_map + '.fits'
 
-            command = ''
-            if self.maps_selector == 'Ampli':
-                command += '    ampli 1 ' + self.pix_map + ' ' + self.z_map + ' Ampli_z' + self.z_map + '_Npix' + \
-                           self.pix_map + '.fits \n'
-                name = 'Ampli_z' + self.z_map + '_Npix' + self.pix_map + '.fits'
-            if self.maps_selector == 'AbsAmpli':
-                command += '    ampli 2 ' + self.pix_map + ' ' + self.z_map + ' AbsAmpli_z' + self.z_map + '_Npix' + \
-                           self.pix_map + '.fits \n'
-                name = 'AbsAmpli_z' + self.z_map + '_Npix' + self.pix_map + '.fits'
-            if self.maps_selector == 'Convergence':
-                command += '    ampli 5 ' + self.pix_map + ' ' + self.z_map + ' Convergence_Npix' + self.pix_map + \
-                           '.fits \n'
-                name = 'Convergence_Npix' + self.pix_map + '.fits'
-            if self.maps_selector == 'Shear':
-                command += '    ampli 6 ' + self.pix_map + ' ' + self.z_map + ' Shear_Npix' + self.pix_map + '.fits \n'
-                name = 'Shear_Npix' + self.pix_map + '.fits'
-            if self.maps_selector == 'Mass_kpc2':
-                command += '    mass 4 ' + self.pix_map + ' ' + '0.396' + ' Mass_kpc2_z' + '0.396' + '_Npix' + \
-                           self.pix_map + '.fits \n'
-                name = 'Mass_kpc2_z' + self.z_map + '_Npix' + self.pix_map + '.fits'
-            if self.maps_selector == 'Mass_pix2':
-                command += '    mass 3 ' + self.pix_map + ' ' + '0.396' + ' Mass_pix2_z' + '0.396' + '_Npix' + \
-                           self.pix_map + '.fits \n'
-                name = 'Mass_pix2_z' + self.z_map + '_Npix' + self.pix_map + '.fits'
-            if self.maps_selector == 'Deflections':
-                command += '    dpl 1 ' + self.pix_map + ' ' + self.z_map + ' DX_z' + self.z_map + '_Npix' + \
-                           self.pix_map + '.fits' + ' DY_z' + self.z_map + '_Npix' + self.pix_map + '.fits \n'
-                name = 'DX_z' + self.z_map + '_Npix' + self.pix_map + '.fits' + ',DY_z' + self.z_map + '_Npix' + \
-                       self.pix_map + '.fits'
+                # if self.maps_selector == 'Mass_pix2':
+                #     command += '    mass 3 ' + self.pix_map + ' ' + '0.396' + ' Mass_pix2_z' + '0.396' + '_Npix' + \
+                #                self.pix_map + '.fits \n'
+                #     name = 'Mass_pix2_z' + self.z_map + '_Npix' + self.pix_map + '.fits'
+                if self.maps_selector == 'Deflection components':
+                    command += '    dpl 1 ' + self.pix_map + ' ' + self.z_map + ' dx_z' + self.z_map + '_Npix' + \
+                               self.pix_map + '.fits' + ' dy_z' + self.z_map + '_Npix' + self.pix_map + '.fits \n'
+                    name = 'dx_z' + self.z_map + '_Npix' + self.pix_map + '.fits' + ',dy_z' + self.z_map + '_Npix' + \
+                           self.pix_map + '.fits'
 
-            dirname_maps = 'computations/' + str(np.random.randint(1, 1000000)) + '/'
+                dirname_maps = 'computations/' + str(np.random.randint(1, 1000000)) + '/'
 
-            os.system('mkdir ' + dirname_maps[:-1])
+                os.system('mkdir ' + dirname_maps[:-1])
 
-            with open('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BEST'], 'r') as f:
-                lines = f.readlines()
-            lines.insert(14, command)
+                with open('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BEST'], 'r') as f:
+                    lines = f.readlines()
+                lines.insert(14, command)
 
-            x_arcsec, y_arcsec = coord_diff(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
-                                            clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], float(self.ra_map),
-                                            float(self.dec_map))
+                x_arcsec, y_arcsec = coord_diff(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
+                                                clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1], float(self.ra_map),
+                                                float(self.dec_map))
 
-            xmapmin = np.round(x_arcsec - float(self.size_map) / 2, 1)
-            xmapmax = np.round(x_arcsec + float(self.size_map) / 2, 1)
-            ymapmin = np.round(y_arcsec - float(self.size_map) / 2, 1)
-            ymapmax = np.round(y_arcsec + float(self.size_map) / 2, 1)
+                xmapmin = np.round(x_arcsec - float(self.size_map) / 2, 1)
+                xmapmax = np.round(x_arcsec + float(self.size_map) / 2, 1)
+                ymapmin = np.round(y_arcsec - float(self.size_map) / 2, 1)
+                ymapmax = np.round(y_arcsec + float(self.size_map) / 2, 1)
 
-            lines[-6] = '    xmin     ' + str(xmapmin) + '\n'
-            lines[-5] = '    xmax     ' + str(xmapmax) + '\n'
-            lines[-4] = '    ymin     ' + str(ymapmin) + '\n'
-            lines[-3] = '    ymax     ' + str(ymapmax) + '\n'
+                lines[-6] = '    xmin     ' + str(xmapmin) + '\n'
+                lines[-5] = '    xmax     ' + str(xmapmax) + '\n'
+                lines[-4] = '    ymin     ' + str(ymapmin) + '\n'
+                lines[-3] = '    ymax     ' + str(ymapmax) + '\n'
 
-            with open(dirname_maps + 'best.par', 'w') as g:
-                lines = "".join(lines)
-                g.write(lines)
+                with open(dirname_maps + 'best.par', 'w') as g:
+                    lines = "".join(lines)
+                    g.write(lines)
 
-            ltmap = Popen(['lenstool best.par -n'], stdout=PIPE, stderr=PIPE, shell=True, cwd=dirname_maps)
-            ltmap.wait()
+                ltmap = Popen(['lenstool best.par -n'], stdout=PIPE, stderr=PIPE, shell=True, cwd=dirname_maps)
+                ltmap.wait()
 
-            if ',' in name:
-                with zipfile.ZipFile(dirname_maps + 'deflections.zip', 'w') as zipObj:
-                    zipObj.write(dirname_maps + name.split(',')[0])
-                    zipObj.write(dirname_maps + name.split(',')[1])
-                file_name = dirname_maps + 'deflections.zip'
-            else:
-                file_name = dirname_maps + name
+                if ',' in name:
+                    with zipfile.ZipFile(dirname_maps + 'deflections.zip', 'w') as zipObj:
+                        zipObj.write(dirname_maps + name.split(',')[0])
+                        zipObj.write(dirname_maps + name.split(',')[1])
+                    file_name = dirname_maps + 'deflections.zip'
+                    name = 'deflections.zip'
+                else:
+                    file_name = dirname_maps + name
 
-            self.mapd = pn.widgets.FileDownload(file_name, embed=True, filename=name, button_type="primary", width=285,
-                                                margin=(5, 0, 10, 11))
+                self.mapd = pn.widgets.FileDownload(file_name, embed=True, filename=name, button_type="primary", width=285,
+                                                    margin=(5, 0, 10, 11))
 
+                os.system('rm -r ' + dirname_maps[:-1])
+
+                return self.mapd
+        except:
+            pass
+        try:
             os.system('rm -r ' + dirname_maps[:-1])
-
-            return self.mapd
+        except:
+            pass
 
 
 class LensFiles(param.Parameterized):
@@ -872,11 +910,11 @@ mainplot = MAINplot()
 lens_files = LensFiles()
 # model_selector = MODELselector()
 
-title = Div(text="<b>MACS J0416</b>",
+title = Div(text="<b>Cluster:</b>",
                  style={'font-size': '16pt', 'color': 'black'}
                  )
 
-subtitle = Div(text="<b>Lens Model by:</b>",
+subtitle = Div(text="<b>Lens Model:</b>",
                style={'font-size': '12pt', 'color': 'black'}
                )
 
@@ -953,7 +991,7 @@ tab3 = pn.WidgetBox(
                                                               'width': 280, 'margin': (10, 0, 1, 9)}},
                             parameters=["references"], show_name=False),
                    pn.Param(mainplot, widgets={"update_ref": {'widget_type': pn.widgets.Button,
-                                                              "button_type": "success", 'name': 'Update reference',
+                                                              "button_type": "success", 'name': 'Update region',
                                                               'margin': (0, 0, 10, 9), 'width': 280}},
                             parameters=["update_ref"], show_name=False),
                    pn.Row(
@@ -972,7 +1010,7 @@ tab3 = pn.WidgetBox(
                                                                  'placeholder': 'Dec', 'name': ''}},
                                   parameters=["dec_map"], width=145, show_name=False)
                          ),
-                   pn.Param(mainplot, widgets={"size_map": {"widget_type": pn.widgets.EditableFloatSlider,
+                   pn.Param(mainplot, widgets={"size_map": {"widget_type": pn.widgets.EditableFloatSlider, 'name': 'Map side (arcsec)',
                                                             'width': 280}}, parameters=["size_map"], show_name=False),
                    pn.Param(mainplot, widgets={"generate_map": {'widget_type': pn.widgets.Button,
                                                                 "button_type": "warning", 'width': 285,
