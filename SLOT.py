@@ -30,6 +30,7 @@ import zipfile
 import pickle
 
 import time
+import webbrowser
 
 pn.extension(loading_spinner='dots', loading_color='#00aa41')
 hv.extension('bokeh')
@@ -177,8 +178,8 @@ class MAINplot(param.Parameterized):
     df_results = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X_best': [], 'Y_best': [], 'RA_best': [],
                                'dRA_16': [], 'dRA_50': [], 'dRA_84': [], 'DEC_best': [], 'dDEC_16': [], 'dDEC_50': [],
                                'dDEC_84': [], 'Xsource_best': [], 'Ysource_best': [], 'RAsource_best': [],
-                               'DECsource_best': [], 'AMP_best': [], 'AMP_16': [], 'AMP_50': [], 'AMP_84': [],
-                               'DTIME_best': [], 'DTIME_16': [], 'DTIME_50': [], 'DTIME_84': [],
+                               'DECsource_best': [], 'MAGNIFICATION_best': [], 'MAGNIFICATION_16': [], 'MAGNIFICATION_50': [], 'MAGNIFICATION_84': [],
+                               #'DTIME_best': [], 'DTIME_16': [], 'DTIME_50': [], 'DTIME_84': [],
                                'PARITY': np.asarray([], dtype=str), 'SEP_16': [], 'SEP_50': [], 'SEP_84': []})
 
     im = param.Action(lambda x: x.param.trigger('im'))
@@ -366,9 +367,11 @@ class MAINplot(param.Parameterized):
         self.df_results = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X_best': [], 'Y_best': [],
                                         'RA_best': [], 'dRA_16': [], 'dRA_50': [], 'dRA_84': [], 'DEC_best': [],
                                         'dDEC_16': [], 'dDEC_50': [], 'dDEC_84': [], 'Xsource_best': [],
-                                        'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'AMP_best': [],
-                                        'AMP_16': [], 'AMP_50': [], 'AMP_84': [], 'DTIME_best': [], 'DTIME_16': [],
-                                        'DTIME_50': [], 'DTIME_84': [], 'PARITY': np.asarray([], dtype=str),
+                                        'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'MAGNIFICATION_best': [],
+                                        'MAGNIFICATION_16': [], 'MAGNIFICATION_50': [], 'MAGNIFICATION_84': [],
+                                        #'DTIME_best': [], 'DTIME_16': [],
+                                        #'DTIME_50': [], 'DTIME_84': [],
+                                        'PARITY': np.asarray([], dtype=str),
                                         'SEP_16': [], 'SEP_50': [], 'SEP_84': []})
         self.param.model.objects = list(clusters_dic[self.cluster]['LENS_MODELS'].keys())
         self.model = list(clusters_dic[self.cluster]['LENS_MODELS'].keys())[0]
@@ -418,7 +421,9 @@ class MAINplot(param.Parameterized):
 
             # OUTPUT MULTIPLE IMAGES
 
-            hover_res = HoverTool(tooltips=[('AMP', '@AMP_best'), ('DTIME', '@DTIME_best'), ('PARITY', '@PARITY')])
+            hover_res = HoverTool(tooltips=[('MAGNIFICATION_best', '@MAGNIFICATION_best'),
+                                            #('DTIME', '@DTIME_best'),
+                                            ('PARITY', '@PARITY')])
 
             output_images = hv.Points(self.df_results, kdims=['X_best', 'Y_best']).opts(color='orange', marker='+', size=10,
                                                                                         tools=[hover_res])
@@ -526,9 +531,11 @@ class MAINplot(param.Parameterized):
                                                                       'dDEC_50': 120, 'dDEC_84': 120,
                                                                       'Xsource_best': 120, 'Ysource_best': 120,
                                                                       'RAsource_best': 120, 'DECsource_best': 120,
-                                                                      'AMP_best': 120, 'AMP_16': 120, 'AMP_50': 120,
-                                                                      'AMP_84': 120, 'DTIME_best': 120, 'DTIME_16': 120,
-                                                                      'DTIME_50': 120, 'DTIME_84': 120, 'PARITY': 60,
+                                                                      'MAGNIFICATION_best': 120, 'MAGNIFICATION_16': 120, 'MAGNIFICATION_50': 120,
+                                                                      'MAGNIFICATION_84': 120,
+                                                                      #'DTIME_best': 120, 'DTIME_16': 120,
+                                                                      #'DTIME_50': 120, 'DTIME_84': 120,
+                                                                      'PARITY': 60,
                                                                       'SEP_16': 120, 'SEP_50': 120, 'SEP_84': 120})
 
     @param.depends('clear_df', watch=True)
@@ -538,9 +545,11 @@ class MAINplot(param.Parameterized):
         self.df_results = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X_best': [], 'Y_best': [],
                                         'RA_best': [], 'dRA_16': [], 'dRA_50': [], 'dRA_84': [], 'DEC_best': [],
                                         'dDEC_16': [], 'dDEC_50': [], 'dDEC_84': [], 'Xsource_best': [],
-                                        'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'AMP_best': [],
-                                        'AMP_16': [], 'AMP_50': [], 'AMP_84': [], 'DTIME_best': [], 'DTIME_16': [],
-                                        'DTIME_50': [], 'DTIME_84': [], 'PARITY': np.asarray([], dtype=str),
+                                        'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'MAGNIFICATION_best': [],
+                                        'MAGNIFICATION_16': [], 'MAGNIFICATION_50': [], 'MAGNIFICATION_84': [],
+                                        #'DTIME_best': [], 'DTIME_16': [],
+                                        #'DTIME_50': [], 'DTIME_84': [],
+                                        'PARITY': np.asarray([], dtype=str),
                                         'SEP_16': [], 'SEP_50': [], 'SEP_84': []})
 
     @param.depends('insert', watch=True)
@@ -595,9 +604,11 @@ class MAINplot(param.Parameterized):
             self.df_results = pd.DataFrame({'ID': np.asarray([], dtype=str), 'z': [], 'X_best': [], 'Y_best': [],
                                             'RA_best': [], 'dRA_16': [], 'dRA_50': [], 'dRA_84': [], 'DEC_best': [],
                                             'dDEC_16': [], 'dDEC_50': [], 'dDEC_84': [], 'Xsource_best': [],
-                                            'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'AMP_best': [],
-                                            'AMP_16': [], 'AMP_50': [], 'AMP_84': [], 'DTIME_best': [], 'DTIME_16': [],
-                                            'DTIME_50': [], 'DTIME_84': [], 'PARITY': np.asarray([], dtype=str),
+                                            'Ysource_best': [], 'RAsource_best': [], 'DECsource_best': [], 'MAGNIFICATION_best': [],
+                                            'MAGNIFICATION_16': [], 'MAGNIFICATION_50': [], 'MAGNIFICATION_84': [],
+                                            #'DTIME_best': [], 'DTIME_16': [],
+                                            #'DTIME_50': [], 'DTIME_84': [],
+                                            'PARITY': np.asarray([], dtype=str),
                                             'SEP_16': [], 'SEP_50': [], 'SEP_84': []})
 
             im = Table()
@@ -706,10 +717,10 @@ class MAINplot(param.Parameterized):
                      'dRA_84': np.round(x[:, 2], 4) - x_b, 'DEC_best': dist['Y'], 'dDEC_16': np.round(y[:, 0], 4) - y_b,
                      'dDEC_50': np.round(y[:, 1], 4) - y_b, 'dDEC_84': np.round(y[:, 2], 4) - y_b,
                      'Xsource_best': xypixs[0], 'Ysource_best': xypixs[1], 'RAsource_best': ras, 'DECsource_best': decs,
-                     'AMP_best': dist['AMP'], 'AMP_16': np.round(percentiles_AMP[:, 0], 3),
-                     'AMP_50': np.round(percentiles_AMP[:, 1], 3), 'AMP_84': np.round(percentiles_AMP[:, 2], 3),
-                     'DTIME_best': dist['DTIME'], 'DTIME_16': np.round(percentiles_DTIME[:, 0], 3),
-                     'DTIME_50': np.round(percentiles_DTIME[:, 1], 3), 'DTIME_84': np.round(percentiles_DTIME[:, 2], 3),
+                     'MAGNIFICATION_best': dist['AMP'], 'MAGNIFICATION_16': np.round(percentiles_AMP[:, 0], 3),
+                     'MAGNIFICATION_50': np.round(percentiles_AMP[:, 1], 3), 'MAGNIFICATION_84': np.round(percentiles_AMP[:, 2], 3),
+                     #'DTIME_best': dist['DTIME'], 'DTIME_16': np.round(percentiles_DTIME[:, 0], 3),
+                     #'DTIME_50': np.round(percentiles_DTIME[:, 1], 3), 'DTIME_84': np.round(percentiles_DTIME[:, 2], 3),
                      'PARITY': dist['PARITY'], 'SEP_16': np.round(percentiles_sep[:, 0], 3),
                      'SEP_50': np.round(percentiles_sep[:, 1], 3), 'SEP_84': np.round(percentiles_sep[:, 2], 3)})
 
@@ -719,7 +730,8 @@ class MAINplot(param.Parameterized):
                 df3 = pd.DataFrame(
                     {'ID': dist['ID'], 'z': redshift, 'X_best': xypix[0], 'Y_best': xypix[1], 'RA_best': dist['X'],
                      'DEC_best': dist['Y'], 'Xsource_best': xypixs[0], 'Ysource_best': xypixs[1], 'RAsource_best': ras,
-                     'DECsource_best': decs, 'AMP_best': dist['AMP'], 'DTIME_best': dist['DTIME'],
+                     'DECsource_best': decs, 'MAGNIFICATION_best': dist['AMP'],
+                     #'DTIME_best': dist['DTIME'],
                      'PARITY': dist['PARITY']})
 
             os.system('rm -r ' + dirname[:-1])
@@ -860,6 +872,8 @@ class LensFiles(param.Parameterized):
     def __init__(self, **params):
         super().__init__(**params)
 
+        self.man = pn.widgets.FileDownload('Manual.pdf', embed=True, filename='Manual.pdf', button_type="default", width=285)
+
         self.file_download_par = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'],
                                                          embed=True,
                                                          filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'],
@@ -877,6 +891,12 @@ class LensFiles(param.Parameterized):
                                                              button_type="primary",
                                                              width=285)
 
+        self.file_download_best = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BEST'],
+                                                           embed=True,
+                                                           filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BEST'],
+                                                           button_type="primary",
+                                                           width=285)
+
         self.file_download_bayes = pn.widgets.FileDownload('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES'],
                                                            embed=True,
                                                            filename=clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES'],
@@ -889,6 +909,9 @@ class LensFiles(param.Parameterized):
                                                             button_type="primary",
                                                             width=285)
 
+    def doc_widget(self):
+        return self.man
+
     def par_widget(self):
         return self.file_download_par
 
@@ -897,6 +920,9 @@ class LensFiles(param.Parameterized):
 
     def members_widget(self):
         return self.file_download_members
+
+    def best_widget(self):
+        return self.file_download_best
 
     def bayes_widget(self):
         return self.file_download_bayes
@@ -948,7 +974,7 @@ tab1 = pn.WidgetBox(
                  pn.layout.Divider(),
                  pn.Row(
                         pn.Param(mainplot, widgets={"id_input": {'widget_type': pn.widgets.TextInput,
-                                                                 'placeholder': 'ID', 'name': ''}},
+                                                                 'placeholder': 'ID (e.g., 1a)', 'name': ''}},
                                  parameters=["id_input"], width=145, show_name=False),
                         pn.Param(mainplot, widgets={"z_input": {'widget_type': pn.widgets.TextInput,
                                                                 'placeholder': 'z', 'name': ''}},
@@ -956,10 +982,10 @@ tab1 = pn.WidgetBox(
                        ),
                  pn.Row(
                         pn.Param(mainplot, widgets={"ra_input": {'widget_type': pn.widgets.TextInput,
-                                                                 'placeholder': 'RA', 'name': ''}},
+                                                                 'placeholder': 'RA (deg)', 'name': ''}},
                                  parameters=["ra_input"], width=145, show_name=False),
                         pn.Param(mainplot, widgets={"dec_input": {'widget_type': pn.widgets.TextInput,
-                                                                  'placeholder': 'Dec', 'name': ''}},
+                                                                  'placeholder': 'DEC (deg)', 'name': ''}},
                                  parameters=["dec_input"], width=145, show_name=False)
                        ),
                  pn.Param(mainplot.param, widgets={"insert": {'widget_type': pn.widgets.Button,
@@ -981,8 +1007,8 @@ tab1 = pn.WidgetBox(
                     )
 
 tab2 = pn.WidgetBox(pn.layout.Divider(), input_files, lens_files.par_widget, lens_files.members_widget,
-                    lens_files.images_widget, pn.layout.Divider(), output_files, lens_files.bayes_widget,
-                    lens_files.chires_widget, pn.layout.Divider())
+                    lens_files.images_widget, pn.layout.Divider(), output_files, lens_files.best_widget,
+                    lens_files.bayes_widget, lens_files.chires_widget, pn.layout.Divider())
 
 tab3 = pn.WidgetBox(
                    pn.layout.Divider(),
@@ -1004,10 +1030,10 @@ tab3 = pn.WidgetBox(
                          ),
                    pn.Row(
                          pn.Param(mainplot, widgets={"ra_map": {'widget_type': pn.widgets.TextInput,
-                                                                'placeholder': 'RA', 'name': ''}},
+                                                                'placeholder': 'RA (deg)', 'name': ''}},
                                   parameters=["ra_map"], width=145, show_name=False),
                          pn.Param(mainplot, widgets={"dec_map": {'widget_type': pn.widgets.TextInput,
-                                                                 'placeholder': 'Dec', 'name': ''}},
+                                                                 'placeholder': 'DEC (deg)', 'name': ''}},
                                   parameters=["dec_map"], width=145, show_name=False)
                          ),
                    pn.Param(mainplot, widgets={"size_map": {"widget_type": pn.widgets.EditableFloatSlider, 'name': 'Map side (arcsec)',
@@ -1019,7 +1045,9 @@ tab3 = pn.WidgetBox(
                    mainplot.map_generator
                    )
 
-widgets = pn.Column(title,
+widgets = pn.Column(
+                    lens_files.man,
+                    title,
                     pn.Param(mainplot,
                              widgets={"cluster": {'widget_type': pn.widgets.Select}},
                              parameters=["cluster"], show_name=False),
