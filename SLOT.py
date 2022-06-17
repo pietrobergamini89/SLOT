@@ -948,7 +948,7 @@ input_files = Div(text="<b>Input files</b>",
                   style={'font-size': '14pt', 'color': 'black'}
                   )
 
-output_files = Div(text="<b>Best-fit lens model</b>",
+output_files = Div(text="<b>Output files</b>",
                    style={'font-size': '14pt', 'color': 'black'}
                    )
 
