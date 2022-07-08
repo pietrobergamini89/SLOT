@@ -555,31 +555,34 @@ class MAINplot(param.Parameterized):
     @param.depends('insert', watch=True)
     def add_value(self):
         try:
-            if self.xc != 0 or self.yc != 0:
-                if ',' in self.z_input:
-                    val = self.z_input.split(',')
-                    z_multiple = np.arange(float(val[0]), float(val[1]), float(val[2]))
-                    id_multiple_list = []
+            # if self.xc != 0 or self.yc != 0:
+            cc = skycoord_to_pixel(SkyCoord(float(self.ra_input), float(self.dec_input), unit='deg', frame='fk5'),
+                                   wcs[0])
 
-                    for i in np.arange(len(z_multiple)):
-                        id_multiple_list.append(self.id_input[:-1] + str(i+1) + self.id_input[-1])
+            if ',' in self.z_input:
+                val = self.z_input.split(',')
+                z_multiple = np.arange(float(val[0]), float(val[1]), float(val[2]))
+                id_multiple_list = []
 
-                    add_df = pd.DataFrame({'ID': np.asarray(id_multiple_list, dtype=str),
-                                           'z': z_multiple,
-                                           'X': np.full(len(z_multiple), float(self.xc)),
-                                           'Y': np.full(len(z_multiple), float(self.yc)),
-                                           'RA': np.full(len(z_multiple), float(self.ra_input)),
-                                           'DEC': np.full(len(z_multiple), float(self.dec_input))})
+                for i in np.arange(len(z_multiple)):
+                    id_multiple_list.append(self.id_input[:-1] + str(i+1) + self.id_input[-1])
 
-                    self.df = pd.concat([self.df, add_df], ignore_index=True)
+                add_df = pd.DataFrame({'ID': np.asarray(id_multiple_list, dtype=str),
+                                       'z': z_multiple,
+                                       'X': np.full(len(z_multiple), float(cc[0])),
+                                       'Y': np.full(len(z_multiple), float(cc[1])),
+                                       'RA': np.full(len(z_multiple), float(self.ra_input)),
+                                       'DEC': np.full(len(z_multiple), float(self.dec_input))})
 
-                else:
-                    self.df = self.df.append({'ID': self.id_input,
-                                              'z': float(self.z_input),
-                                              'X': float(self.xc),
-                                              'Y': float(self.yc),
-                                              'RA': float(self.ra_input),
-                                              'DEC': float(self.dec_input)}, ignore_index=True)
+                self.df = pd.concat([self.df, add_df], ignore_index=True)
+
+            else:
+                self.df = self.df.append({'ID': self.id_input,
+                                          'z': float(self.z_input),
+                                          'X': float(cc[0]),
+                                          'Y': float(cc[1]),
+                                          'RA': float(self.ra_input),
+                                          'DEC': float(self.dec_input)}, ignore_index=True)
         except:
             pass
 
@@ -627,8 +630,32 @@ class MAINplot(param.Parameterized):
             os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_BEST']
                       + ' ' + dirname + 'bayes.dat')
 
-            os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
-                      + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
+            # if dirname == '0':
+            #     os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
+            #               + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
+            # else:
+
+            xa, ya = coord_diff(clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][0],
+                                clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['REF_COORDS'][1],
+                                im['col2'], im['col3'])
+
+            with open('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'], 'r') as f:
+                lines = f.readlines()
+            for nl, line in enumerate(lines):
+                if 'nombre' in line:
+                    lines[nl] = '    nombre ' + str(int((np.max([np.max(xa)-np.min(xa)+10, np.max(ya)-np.min(ya)+10]))/0.3)) + '\n'
+                if 'xmin' in line:
+                    lines[nl] = '    xmin     ' + str(int(np.min(xa)-5)) + '\n'
+                if 'xmax' in line:
+                    lines[nl] = '    xmax     ' + str(int(np.max(xa)+5)) + '\n'
+                if 'ymin' in line:
+                    lines[nl] = '    ymin     ' + str(int(np.min(ya)-5)) + '\n'
+                if 'ymax' in line:
+                    lines[nl] = '    ymax     ' + str(int(np.max(ya)+5)) + '\n'
+
+            with open(dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'], 'w') as g:
+                lines = "".join(lines)
+                g.write(lines)
 
             os.system('cp ' + 'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' +clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
                       + ' ' + dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
@@ -695,8 +722,12 @@ class MAINplot(param.Parameterized):
                 os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['BAYES_RANDOM']
                           + ' ' + dirname2 + 'bayes.dat')
 
-                os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
-                          + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
+                # os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT']
+                #           + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'])
+
+                with open(dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'], 'w') as g:
+                    lines = "".join(lines)
+                    g.write(lines)
 
                 os.system('cp '+'CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES']
                           + ' ' + dirname2 + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['CLUSTER_GALAXIES'])
@@ -832,10 +863,15 @@ class MAINplot(param.Parameterized):
                 ymapmin = np.round(y_arcsec - float(self.size_map) / 2, 1)
                 ymapmax = np.round(y_arcsec + float(self.size_map) / 2, 1)
 
-                lines[-6] = '    xmin     ' + str(xmapmin) + '\n'
-                lines[-5] = '    xmax     ' + str(xmapmax) + '\n'
-                lines[-4] = '    ymin     ' + str(ymapmin) + '\n'
-                lines[-3] = '    ymax     ' + str(ymapmax) + '\n'
+                for nl, line in enumerate(lines):
+                    if 'xmin' in line:
+                        lines[nl] = '    xmin     ' + str(xmapmin) + '\n'
+                    if 'xmax' in line:
+                        lines[nl] = '    xmax     ' + str(xmapmax) + '\n'
+                    if 'ymin' in line:
+                        lines[nl] = '    ymin     ' + str(ymapmin) + '\n'
+                    if 'ymax' in line:
+                        lines[nl] = '    ymax     ' + str(ymapmax) + '\n'
 
                 with open(dirname_maps + 'best.par', 'w') as g:
                     lines = "".join(lines)
