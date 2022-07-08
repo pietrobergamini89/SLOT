@@ -641,17 +641,34 @@ class MAINplot(param.Parameterized):
 
             with open('CLUSTERS/'+current_cluster[0]+'/LENS_MODELS/'+current_model[0]+'/' + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'], 'r') as f:
                 lines = f.readlines()
+                if np.min(xa) > -70:
+                    xmin = -70
+                else:
+                    xmin = int(np.min(xa) - 5)
+                if np.max(xa) < 70:
+                    xmax = 70
+                else:
+                    xmax = int(np.max(xa) + 5)
+                if np.min(ya) > -70:
+                    ymin = -70
+                else:
+                    ymin = int(np.min(ya) - 5)
+                if np.max(ya) < 70:
+                    ymax = 70
+                else:
+                    ymax = int(np.max(ya) + 5)
+
             for nl, line in enumerate(lines):
                 if 'nombre' in line:
-                    lines[nl] = '    nombre ' + str(int((np.max([np.max(xa)-np.min(xa)+10, np.max(ya)-np.min(ya)+10]))/0.3)) + '\n'
+                    lines[nl] = '    nombre ' + str(int((np.max([xmax-xmin, ymax-ymin]))/0.3)) + '\n'
                 if 'xmin' in line:
-                    lines[nl] = '    xmin     ' + str(int(np.min(xa)-5)) + '\n'
+                    lines[nl] = '    xmin     ' + str(xmin) + '\n'
                 if 'xmax' in line:
-                    lines[nl] = '    xmax     ' + str(int(np.max(xa)+5)) + '\n'
+                    lines[nl] = '    xmax     ' + str(xmax) + '\n'
                 if 'ymin' in line:
-                    lines[nl] = '    ymin     ' + str(int(np.min(ya)-5)) + '\n'
+                    lines[nl] = '    ymin     ' + str(ymin) + '\n'
                 if 'ymax' in line:
-                    lines[nl] = '    ymax     ' + str(int(np.max(ya)+5)) + '\n'
+                    lines[nl] = '    ymax     ' + str(ymax) + '\n'
 
             with open(dirname + clusters_dic[current_cluster[0]]['LENS_MODELS'][current_model[0]]['INPUT'], 'w') as g:
                 lines = "".join(lines)
