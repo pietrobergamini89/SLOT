@@ -704,7 +704,7 @@ class MAINplot(param.Parameterized):
             ras = np.zeros(len(names))
             decs = np.zeros(len(names))
 
-            l = list(string.ascii_lowercase)
+            l = list(string.ascii_uppercase)
             idp = -1
             il = 0
 
@@ -718,7 +718,7 @@ class MAINplot(param.Parameterized):
                     idp = ids
                     il = 0
 
-                names[i] = str(ids) + l[il]
+                names[i] = str(ids) + l[-il]
 
                 il += 1
 
