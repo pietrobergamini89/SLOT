@@ -704,7 +704,7 @@ class MAINplot(param.Parameterized):
             ras = np.zeros(len(names))
             decs = np.zeros(len(names))
 
-            l = list(string.ascii_uppercase).reverse()
+            l = list(reversed(list(string.ascii_uppercase)))
             idp = -1
             il = 0
 
