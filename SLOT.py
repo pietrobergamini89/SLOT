@@ -706,7 +706,7 @@ class MAINplot(param.Parameterized):
 
             l = list(string.ascii_uppercase)
             idp = -1
-            il = 0
+            il = 1
 
             for i, ids in enumerate(dist['ID']):
                 mask_sources = (sources['col1'] == ids)
@@ -716,7 +716,7 @@ class MAINplot(param.Parameterized):
 
                 if ids != idp:
                     idp = ids
-                    il = 0
+                    il = 1
 
                 names[i] = str(ids) + l[-il]
 
