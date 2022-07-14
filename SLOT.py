@@ -704,9 +704,9 @@ class MAINplot(param.Parameterized):
             ras = np.zeros(len(names))
             decs = np.zeros(len(names))
 
-            l = list(string.ascii_uppercase)
+            l = list(string.ascii_uppercase).reverse()
             idp = -1
-            il = 1
+            il = 0
 
             for i, ids in enumerate(dist['ID']):
                 mask_sources = (sources['col1'] == ids)
@@ -716,9 +716,9 @@ class MAINplot(param.Parameterized):
 
                 if ids != idp:
                     idp = ids
-                    il = 1
+                    il = 0
 
-                names[i] = str(ids) + l[-il]
+                names[i] = str(ids) + l[il]
 
                 il += 1
 
