@@ -660,7 +660,8 @@ class MAINplot(param.Parameterized):
 
             for nl, line in enumerate(lines):
                 if 'nombre' in line:
-                    lines[nl] = '    nombre ' + str(int((np.max([xmax-xmin, ymax-ymin]))/0.3)) + '\n'
+                    lines[nl] = '    nombre 256\n'
+                    # lines[nl] = '    nombre ' + str(int((np.max([xmax-xmin, ymax-ymin]))/0.3)) + '\n'
                 if 'xmin' in line:
                     lines[nl] = '    xmin     ' + str(xmin) + '\n'
                 if 'xmax' in line:
